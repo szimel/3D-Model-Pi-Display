@@ -1,32 +1,239 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<title>three.js webgl - cameras</title>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<style>
-			b {
-				color: lightgreen;
-			}
-		</style>
-		<script type="importmap">
-			{
-				"imports": {
-					"three": "https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js",
-					"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/"
-				}
-			}
-		</script>
-	</head>
-	<body>
-		<div id="info"><a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - cameras<br/>
-		<b>O</b> orthographic <b>P</b> perspective 
-		</div>
+<head>
+  <title>three.js webgl - cameras</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+  <style>
+    b { color: lightgreen; }
+    body { margin: 0; overflow: hidden; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="info"><a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - cameras<br/><b>O</b> orthographic <b>P</b> perspective</div>
 
-		<script type="module">
+  <!-- <script type="module">
+    import * as THREE from 'three';
+    import Stats from 'three/addons/libs/stats.module.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    let SCREEN_WIDTH = window.innerWidth;
+    let SCREEN_HEIGHT = window.innerHeight;
+    let aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+
+    let container, stats;
+    let camera, scene, renderer, mesh;
+    let cameraRig, activeCamera, activeHelper;
+    let cameraPerspective, cameraOrtho;
+    let cameraPerspectiveHelper, cameraOrthoHelper;
+    const frustumSize = 600;
+
+    init();
+
+    function init() {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+
+      scene = new THREE.Scene();
+
+      // Lighting for GLTF materials
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+      dirLight.position.set(5, 10, 7.5);
+      scene.add(dirLight);
+
+      // Main camera (unused directly)
+      camera = new THREE.PerspectiveCamera(50, aspect, 1, 10000);
+      camera.position.z = 2500;
+
+      // Perspective camera in rig
+      cameraPerspective = new THREE.PerspectiveCamera(50, aspect, 150, 1000);
+      cameraPerspective.rotation.y = Math.PI;
+      cameraPerspectiveHelper = new THREE.CameraHelper(cameraPerspective);
+      scene.add(cameraPerspectiveHelper);
+
+      // Orthographic camera in rig
+      cameraOrtho = new THREE.OrthographicCamera(
+        -frustumSize * aspect / 2,
+        frustumSize * aspect / 2,
+        frustumSize / 2,
+        -frustumSize / 2,
+        150,
+        1000
+      );
+      cameraOrtho.rotation.y = Math.PI;
+      cameraOrthoHelper = new THREE.CameraHelper(cameraOrtho);
+      scene.add(cameraOrthoHelper);
+
+      activeCamera = cameraPerspective;
+      activeHelper = cameraPerspectiveHelper;
+
+      cameraRig = new THREE.Group();
+      cameraRig.add(cameraPerspective, cameraOrtho);
+      scene.add(cameraRig);
+
+      // Load GLTF and start loop
+      const loader = new GLTFLoader();
+      loadModelAndStart(loader);
+
+      // Invisible sphere (unused) just in scene
+      const mesh2 = new THREE.Mesh(
+        new THREE.SphereGeometry(0, 0, 0),
+        new THREE.MeshBasicMaterial({ color: 0x000000 })
+      );
+      mesh2.position.y = 150;
+      scene.add(mesh2);
+
+      // Particle cloud
+      const geometry = new THREE.BufferGeometry();
+      const vertices = [];
+      for (let i = 0; i < 10000; i++) {
+        vertices.push(THREE.MathUtils.randFloatSpread(2000));
+        vertices.push(THREE.MathUtils.randFloatSpread(2000));
+        vertices.push(THREE.MathUtils.randFloatSpread(2000));
+      }
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      const particles = new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0x888888 }));
+      scene.add(particles);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+      container.appendChild(renderer.domElement);
+
+      // FPS stats
+      stats = new Stats();
+      container.appendChild(stats.dom);
+
+      window.addEventListener('resize', onWindowResize);
+      document.addEventListener('keydown', onKeyDown);
+    }
+
+    async function loadModelAndStart(loader) {
+      try {
+        const gltf = await loader.loadAsync('../../Models/stool_2.glb');
+        const model = gltf.scene;
+
+        // Center model
+        const bbox = new THREE.Box3().setFromObject(model);
+        const center = bbox.getCenter(new THREE.Vector3());
+        model.position.sub(center);
+
+        // Lift to sit on ground
+        const size = bbox.getSize(new THREE.Vector3());
+        model.position.y += size.y / 2;
+
+        // Rotate 90° on X to correct orientation
+        model.rotation.x = Math.PI / 2;
+
+        // Pivot group to animate position without losing centering
+        mesh = new THREE.Group();
+        mesh.add(model);
+        scene.add(mesh);
+
+        // Now that mesh exists, start animation loop
+        renderer.setAnimationLoop(animate);
+      } catch (err) {
+        console.error('Error loading GLTF model:', err);
+      }
+    }
+
+    function onKeyDown(event) {
+      switch (event.keyCode) {
+        case 79: // O
+          activeCamera = cameraOrtho;
+          activeHelper = cameraOrthoHelper;
+          break;
+        case 80: // P
+          activeCamera = cameraPerspective;
+          activeHelper = cameraPerspectiveHelper;
+          break;
+      }
+    }
+
+    function onWindowResize() {
+      SCREEN_WIDTH = window.innerWidth;
+      SCREEN_HEIGHT = window.innerHeight;
+      aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+
+      renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+      camera.aspect = 0.5 * aspect;
+      camera.updateProjectionMatrix();
+
+      cameraPerspective.aspect = 0.5 * aspect;
+      cameraPerspective.updateProjectionMatrix();
+
+      cameraOrtho.left = -frustumSize * aspect / 2;
+      cameraOrtho.right = frustumSize * aspect / 2;
+      cameraOrtho.top = frustumSize / 2;
+      cameraOrtho.bottom = -frustumSize / 2;
+      cameraOrtho.updateProjectionMatrix();
+    }
+
+    // function animate() {
+    //   render();
+    //   stats.update();
+    // }
+		function animate() {
+    if (scene) {
+			console.log(scene)
+			scene.position.y = 150;
+      // scene.rotation.y += 0.005;
+    }
+    renderer.render(scene, activeCamera);
+  }
+
+    function render() {
+      const r = Date.now() * 0.0005;
+
+      // Move pivot (mesh) using original sin/cos logic
+      mesh.position.x = 700 * Math.cos(r);
+      mesh.position.y = 700 * Math.sin(r);
+      mesh.position.z = 700 * Math.sin(r);
+      // Optional child local animation
+      mesh.children[0].position.x = Math.cos(r);
+      mesh.children[0].position.z = Math.sin(r);
+
+      if (activeCamera === cameraPerspective) {
+        cameraPerspective.fov = 35 + 30 * Math.sin(0.5 * r);
+        cameraPerspective.far = mesh.position.length();
+        cameraPerspective.updateProjectionMatrix();
+
+        cameraPerspectiveHelper.update();
+        cameraPerspectiveHelper.visible = true;
+        cameraOrthoHelper.visible = false;
+      } else {
+        cameraOrtho.far = mesh.position.length();
+        cameraOrtho.updateProjectionMatrix();
+
+        cameraOrthoHelper.update();
+        cameraOrthoHelper.visible = true;
+        cameraPerspectiveHelper.visible = false;
+      }
+
+      cameraRig.lookAt(mesh.position);
+
+      activeHelper.visible = false;
+      renderer.setClearColor(0x000000, 1);
+      renderer.setViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+      renderer.render(scene, activeCamera);
+    }
+  </script> -->
+	<script type="module">
+
 			import * as THREE from 'three';
+
 			import Stats from 'three/addons/libs/stats.module.js';
-			import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 			let SCREEN_WIDTH = window.innerWidth;
 			let SCREEN_HEIGHT = window.innerHeight;
@@ -50,16 +257,16 @@
 
 				//
 
-				camera = new THREE.PerspectiveCamera( 50, aspect, 1, 10000 );
+				camera = new THREE.PerspectiveCamera( 50, 0.5 * aspect, 1, 10000 );
 				camera.position.z = 2500;
 
-				cameraPerspective = new THREE.PerspectiveCamera( 50, aspect, 150, 1000 );
+				cameraPerspective = new THREE.PerspectiveCamera( 50, 0.5 * aspect, 150, 1000 );
 
 				cameraPerspectiveHelper = new THREE.CameraHelper( cameraPerspective );
 				scene.add( cameraPerspectiveHelper );
 
 				//
-				cameraOrtho = new THREE.OrthographicCamera(frustumSize * aspect / - 2, 0.5 * frustumSize * aspect, frustumSize / 2, frustumSize / - 2, 150, 1000 );
+				cameraOrtho = new THREE.OrthographicCamera( 0.5 * frustumSize * aspect / - 2, 0.5 * frustumSize * aspect / 2, frustumSize / 2, frustumSize / - 2, 150, 1000 );
 
 				cameraOrthoHelper = new THREE.CameraHelper( cameraOrtho );
 				scene.add( cameraOrthoHelper );
@@ -82,35 +289,29 @@
 
 				scene.add( cameraRig );
 
-				// gives it time to grab model
-				const loader = new GLTFLoader();
-				async function loadModel() {
-					mesh = await loader.loadAsync('PEN.glb');
-					scene.add( mesh );
-				}
-				loadModel();
+				//
 
-				// invisible sphere used in animation
+				mesh = new THREE.Mesh(
+					new THREE.SphereGeometry( 100, 16, 8 ),
+					new THREE.MeshBasicMaterial( { color: 0xffffff, wireframe: true } )
+				);
+				scene.add( mesh );
+
 				const mesh2 = new THREE.Mesh(
-					new THREE.SphereGeometry( 0, 0, 0 ),
-					new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: false } )
+					new THREE.SphereGeometry( 50, 16, 8 ),
+					new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe: true } )
 				);
 				mesh2.position.y = 150;
-				scene.add( mesh2 );
+				mesh.add( mesh2 );
 
-				// mesh = new GLTFLoader().load(
-				// 	'PEN.glb',                                      // <-- your file
-				// 	(gltf) => {
-				// 		console.log(gltf)
-				// 		return gltf.scene;
-				// 	});
-				// 	scene.add( mesh );
+				const mesh3 = new THREE.Mesh(
+					new THREE.SphereGeometry( 5, 16, 8 ),
+					new THREE.MeshBasicMaterial( { color: 0x0000ff, wireframe: true } )
+				);
+				mesh3.position.z = 150;
+				cameraRig.add( mesh3 );
 
-				// mesh = new THREE.Mesh(
-				// 	new THREE.SphereGeometry( 100, 16, 8 ),
-				// 	new THREE.MeshBasicMaterial( { color: 0xffffff, wireframe: true } )
-				// );
-				// scene.add( mesh );
+				//
 
 				const geometry = new THREE.BufferGeometry();
 				const vertices = [];
@@ -135,6 +336,8 @@
 				renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
 				renderer.setAnimationLoop( animate );
 				container.appendChild( renderer.domElement );
+
+				renderer.setScissorTest( true );
 
 				//
 
@@ -210,14 +413,12 @@
 
 				const r = Date.now() * 0.0005;
 
-				console.log(mesh);
-
 				mesh.position.x = 700 * Math.cos( r );
 				mesh.position.z = 700 * Math.sin( r );
 				mesh.position.y = 700 * Math.sin( r );
 
-				mesh.children[ 0 ].position.x = Math.cos( r );
-				mesh.children[ 0 ].position.z = Math.sin( r );
+				mesh.children[ 0 ].position.x = 70 * Math.cos( 2 * r );
+				mesh.children[ 0 ].position.z = 70 * Math.sin( r );
 
 				if ( activeCamera === cameraPerspective ) {
 
@@ -249,24 +450,21 @@
 				activeHelper.visible = false;
 
 				renderer.setClearColor( 0x000000, 1 );
-				// renderer.setScissor( 0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT );
-				renderer.setViewport( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT );
+				renderer.setScissor( 0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT );
+				renderer.setViewport( 0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT );
 				renderer.render( scene, activeCamera );
 
 				//
 
 				activeHelper.visible = true;
+
+				renderer.setClearColor( 0x111111, 1 );
+				renderer.setScissor( SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT );
+				renderer.setViewport( SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT );
+				renderer.render( scene, camera );
+
 			}
 
 		</script>
-
-	</body>
+</body>
 </html>
-
-
-
-<!-- /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
---disable-web-security \
---user-data-dir="/tmp/chrome-dev-disable-cors" \
---allow-file-access-from-files \
-file:///Users/samuel/Downloads/camera.html -->
