@@ -9,7 +9,6 @@ let scene, camera, renderer, stats;
 let chair, brush, points, AnimationData;
 let currentFrame = 0;
 
-
 function setup() {
 	scene = new THREE.Scene();
 	scene.background = new THREE.Color(0xD2B48C); // tan
@@ -35,7 +34,24 @@ function setup() {
 		camera.updateProjectionMatrix();
 		renderer.setSize(window.innerWidth, window.innerHeight);
 	});
+	document.addEventListener('keydown', onKeyDown);
 };
+
+function onKeyDown(event) {
+	switch (event.keyCode) {
+	case 79: // O
+		const lookingAt = new THREE.Vector3();
+		camera.getWorldDirection(lookingAt)
+		camera.lookAt(points.position)
+		break;
+	case 80: // P
+		const idk = new THREE.Vector3();
+		camera.getWorldDirection(idk)
+		// camera.lookAt(idk.x, idk.y + .33, idk.z)
+		camera.lookAt(points);
+		break;
+	}
+}
 
 
 // --- load & set json and glb's --- \\
@@ -58,6 +74,7 @@ async function loadAssets() {
 		brush.visible = false;
 
 		scene.add(chair, brush);
+		console.log('scene', scene);
 
 	}catch (err) {
 		console.error('Error loading glb model:', err);
@@ -67,13 +84,13 @@ async function loadAssets() {
 
 // --- create model particles for transition --- \\
 function createParticles() {
-	const numParticles = 500;
+	const numParticles = 2500;
 	const chairMesh = scene.children[2].children[0].children[0];
 	const brushMesh = scene.children[3].children[0];
 	const material = new THREE.PointsMaterial({
-		size: 1,
+		size: .05,
 		sizeAttenuation: true,
-		color: 0x32cd32
+		color: 0x999999
 	});
 
 	const chairSurface = new MeshSurfaceSampler(chairMesh).build();
@@ -85,9 +102,9 @@ function createParticles() {
 	// const posChair = new THREE.Vector3();
 	// const posBrush = new THREE.Vector3();
 
-	// const matrixC = new THREE.Matrix4();
-	// const matrixB = new THREE.Matrix4();
-
+	// const matrixC = new THREE.Matrix3();
+	// const matrixB = new THREE.Matrix3();
+	
 	// for ( let i = 0; i < numParticles; i ++ ) { // map rand points on model's surface
 	// 	chairSurface.sample(posChair);
 	// 	brushSurface.sample(posBrush);
@@ -95,9 +112,13 @@ function createParticles() {
 	// 	matrixC.makeTranslation(posChair.x, posChair.y, posChair.z);
 	// 	matrixB.makeTranslation(posBrush.x, posBrush.y, posBrush.z);
 
+	// 	console.log(matrixC)
+
 	// 	chairPoints.setMatrixAt( i, matrixC );
 	// 	brushPoints.setMatrixAt(i, matrixB);
 	// }
+
+	// console.log(chairPoints)
 
 	const posChair = new Float32Array(numParticles * 3); // large container, stores w/ indices
 	const posBrush = new Float32Array(numParticles * 3);
@@ -110,20 +131,25 @@ function createParticles() {
 		posBrush.set([tempPos.x, tempPos.y, tempPos.z], i * 3);
 	}
 
-	// console.log('posChair', posChair);
-	// console.log('posBrush', posBrush);
+	console.log('posChair', posChair);
+	console.log('posBrush', posBrush);
 
 	const pointMesh = new THREE.BufferGeometry();
-	pointMesh.setAttribute('position', new THREE.BufferAttribute(posChair, 3).setUsage( THREE.DynamicDrawUsage ));
+	pointMesh.setAttribute('position', new THREE.BufferAttribute(posChair, 3));
 	pointMesh.setAttribute('targetPosition', new THREE.BufferAttribute(posBrush, 3));
 	pointMesh.setDrawRange(0, numParticles);
-	// pointMesh.computeBoundingSphere();
+	pointMesh.computeBoundingSphere();
 
-	console.log('IMP', pointMesh);
+	console.log(pointMesh);
 
 	points = new THREE.Points(pointMesh, material);
 	points.frustumCulled = false; 
+	
+	points.rotation.x = THREE.MathUtils.degToRad(90); // spawns in annoying
+	points.position.set(-1.1776, 0.918, 0.918)
+
 	scene.add(points);
+	console.log(points);
 };
 
 
@@ -159,7 +185,6 @@ function chairAnimation() {
 	renderer.render(scene, camera);
 
 	if(currentFrame == AnimationData.stool.length -1) {
-		console.log(camera);
 		return transitionAnimation();
 	} else {
 		currentFrame ++;
@@ -171,22 +196,25 @@ function chairAnimation() {
 function transitionAnimation() {
 	chair.visible = false;
 	brush.visible = false;
-	console.log(points);
+
 
 	const positions = points.geometry.attributes.position.array
 	const targets = scene.children[4].geometry.attributes.targetPosition.array;
 
 
 	for (let i = 0; i < positions.length; i++) {
-		positions[i] = THREE.MathUtils.lerp(positions[i], targets[i], 1);
+		// console.log(positions[i]);
+		// positions[i] = positions[i] * 1.01
+		positions[i] = THREE.MathUtils.lerp(positions[i], targets[i], .1);
 	}
 
 	// positions.map((position, index) => {
 	// 	position = THREE.MathUtils.lerp(position, targets[index], 1);
 	// })
-
 	scene.children[4].geometry.attributes.position.needsUpdate = true;
 	renderer.render(scene, camera);
+
+	requestAnimationFrame(transitionAnimation)
 }
 
 		// new Tween({ t: 0 })
