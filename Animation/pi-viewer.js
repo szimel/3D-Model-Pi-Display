@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 import Stats from 'three/addons/libs/stats.module.js';
-import { Tween, Easing } from 'three/addons/libs/tween.module.js';
+import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/tween.esm.js'
 
 
 let scene, camera, renderer, stats;
 let chair, brush, points, AnimationData;
 let frameCount = 0;
+let state = 'chair' | 'brush' | 'transition';
+
 
 function setup() {
 	scene = new THREE.Scene();
@@ -36,7 +38,6 @@ function setup() {
 	});
 	document.addEventListener('keydown', onKeyDown);
 };
-
 function onKeyDown(event) {
 	switch (event.keyCode) {
 	case 79: // O
@@ -68,8 +69,9 @@ async function loadAssets() {
 		chair = chairGLB.scene;
 		brush = brushGLB.scene;
 
-		// orient & position your models
+		// manual orientation bc i suck at blender
 		chair.rotation.x = THREE.MathUtils.degToRad(90);
+		chair.position.set(1.776, 0.918, 0.918)
 		brush.position.set(-1.766, 0.918, 1.118);
 		brush.visible = false;
 
@@ -84,14 +86,15 @@ async function loadAssets() {
 
 // --- create model particles for transition --- \\
 function createParticles() {
-	const numParticles = 3500;
-	const chairMesh = scene.children[2].children[0].children[0];
-	const brushMesh = scene.children[3].children[0];
+	const numParticles = 3000;
+	const chairMesh = chair.children[0].children[0];
+	const brushMesh = brush.children[0];
 	const material = new THREE.PointsMaterial({
 		size: .01,
 		sizeAttenuation: true,
 		color: 0x999999
 	});
+	// const material = chairMesh.material;
 
 	const chairSurface = new MeshSurfaceSampler(chairMesh).build();
 	const brushSurface = new MeshSurfaceSampler(brushMesh).build();
@@ -117,12 +120,11 @@ function createParticles() {
 	points.frustumCulled = false; 
 	
 	points.rotation.x = THREE.MathUtils.degToRad(90); // spawns in annoying
-	points.position.set(-1.1776, 0.918, 0.918)
+	points.position.set(-1.7, 0.922, .918)
 	points.visible = false;
 
 	scene.add(points);
 };
-
 
 
 // --- load everything in order --- \\
@@ -131,64 +133,95 @@ async function init() {
 	setup();
 	await loadAssets();
 	createParticles();
-	handleAnimations();
+
+	state = 'chair';
+	animate();
 }
 
 
-
-// --- manages animation sequence -- \\
-function handleAnimations() {
-	//TODO: Switch statement w global var tracking current animation? 
-	chairAnimation(); // ends with camera facing chair from front on
-	// transitionAnimation();
-}
-
-
-function chairAnimation() {
+// --- --- \\
+function animate(time) {
+	requestAnimationFrame(animate);
 	stats.update();
+	Tween.update(time);
 
-	const position = AnimationData.stool[frameCount];
-	const chairPos = scene.children[2].position;
-
-	chairPos.set(position.x, position.y, position.z);
-	camera.lookAt(chairPos);
+	switch(state) {
+		case 'chair': updateChair(); break;
+		case 'transition': startTweenTransition(); break;
+		case 'brush': return;
+	}
 
 	renderer.render(scene, camera);
+}
 
-	if(frameCount == AnimationData.stool.length -1) {
-		frameCount = 0;
-		return transitionAnimation();
+function updateChair() {
+	const path = AnimationData.stool;
+
+	if (frameCount < path.length) {
+		const { x, y, z } = path[frameCount++];
+		chair.position.set(x, y, z);
+		camera.lookAt(chair.position);
+
 	} else {
-		frameCount ++;
-		requestAnimationFrame(chairAnimation);
-
+		frameCount = 1;
+		state = 'transition';
 	}
 }
 
-function transitionAnimation() {
-	chair.visible = false;
-	brush.visible = false;
+function startTweenTransition() {
+	// hide the originals
+	// chair.visible = brush.visible = false;
 	points.visible = true;
 
-	const positions = points.geometry.attributes.position.array
-	const targets = scene.children[4].geometry.attributes.targetPosition.array;
+	// capture initial & target arrays for each point
+	const start = points.geometry.attributes.position.array;
+	const target = points.geometry.attributes.targetPosition.array;
 
-	if(frameCount < 25) {
-		frameCount ++;
-		console.log(((Math.log10(frameCount) ** 2)/45) + 1)
-		for (let i = 0; i < positions.length; i++) {
-			positions[i] = positions[i] * (((Math.log10(frameCount) ** 2)/45) + 1)
-			
+
+	new Tween.Tween({ t:0 })
+		.to({ t: .005 }, 4000)
+		.easing(Easing.Exponential.Out)
+		.onUpdate(o => {
+		frameCount++
+
+		for (let i = 0; i < start.length; i++) {
+			const endPos = THREE.MathUtils.lerp(start[i], target[i], o.t);
+			start[i] = endPos;
 		}
+		points.geometry.attributes.position.needsUpdate = true;
 
-	} else {
-		for (let i = 0; i < positions.length; i++) {
-			positions[i] = THREE.MathUtils.lerp(positions[i], targets[i], .1);
-		}
-	}
-
-	scene.children[4].geometry.attributes.position.needsUpdate = true;
-	renderer.render(scene, camera);
-
-	requestAnimationFrame(transitionAnimation)
+		}).onComplete(() => {
+			state = 'brush';
+		})
+		.start();
 }
+
+
+// function transitionAnimation() {
+// 	chair.visible = false;
+// 	brush.visible = false;
+// 	points.visible = true;
+
+// 	const positions = points.geometry.attributes.position.array
+// 	const targets = scene.children[4].geometry.attributes.targetPosition.array;
+
+// 	if(frameCount < 25) {
+// 		frameCount ++;
+// 		console.log(((Math.log10(frameCount) ** 2)/45) + 1)
+// 		for (let i = 0; i < positions.length; i++) {
+// 			// positions[i] = positions[i] * (((Math.log10(frameCount) ** 2)/45) + 1)
+// 			positions[i] = positions[i] * (1 + Math.random() * 0.04);
+
+// 		}
+
+// 	} else {
+// 		for (let i = 0; i < positions.length; i++) {
+// 			positions[i] = THREE.MathUtils.lerp(positions[i], targets[i], .1);
+// 		}
+// 	}
+
+// 	scene.children[4].geometry.attributes.position.needsUpdate = true;
+// 	renderer.render(scene, camera);
+
+// 	requestAnimationFrame(transitionAnimation)
+// }
