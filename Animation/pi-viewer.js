@@ -3,12 +3,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 import Stats from 'three/addons/libs/stats.module.js';
 import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/tween.esm.js'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 
 let scene, camera, renderer, stats;
 let chair, brush, points, AnimationData;
 let frameCount = 0;
 let state = 'chair' | 'brush' | 'transition';
+
+let controls;
 
 
 function setup() {
@@ -25,6 +28,8 @@ function setup() {
 	camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 10);
 	camera.position.set(1, 1, 1);
 	camera.lookAt(0, 0, 0);    
+
+	controls = new OrbitControls(camera, renderer.domElement);
 
 	scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
 	const dir = new THREE.DirectionalLight(0xffffff, 1);
@@ -87,14 +92,16 @@ async function loadAssets() {
 // --- create model particles for transition --- \\
 function createParticles() {
 	const numParticles = 3000;
-	const chairMesh = chair.children[0].children[0];
-	const brushMesh = brush.children[0];
+	const chairMesh = scene.children[2].children[0].children[0];
+	const brushMesh = scene.children[3].children[0];
 	const material = new THREE.PointsMaterial({
 		size: .01,
 		sizeAttenuation: true,
 		color: 0x999999
 	});
 	// const material = chairMesh.material;
+
+	testMesh();
 
 	const chairSurface = new MeshSurfaceSampler(chairMesh).build();
 	const brushSurface = new MeshSurfaceSampler(brushMesh).build();
