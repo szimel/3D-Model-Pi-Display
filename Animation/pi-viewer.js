@@ -7,7 +7,7 @@ import { Tween, Easing } from 'three/addons/libs/tween.module.js';
 
 let scene, camera, renderer, stats;
 let chair, brush, points, AnimationData;
-let currentFrame = 0;
+let frameCount = 0;
 
 function setup() {
 	scene = new THREE.Scene();
@@ -84,41 +84,17 @@ async function loadAssets() {
 
 // --- create model particles for transition --- \\
 function createParticles() {
-	const numParticles = 2500;
+	const numParticles = 3500;
 	const chairMesh = scene.children[2].children[0].children[0];
 	const brushMesh = scene.children[3].children[0];
 	const material = new THREE.PointsMaterial({
-		size: .05,
+		size: .01,
 		sizeAttenuation: true,
 		color: 0x999999
 	});
 
 	const chairSurface = new MeshSurfaceSampler(chairMesh).build();
 	const brushSurface = new MeshSurfaceSampler(brushMesh).build();
-
-	// const chairPoints = new THREE.InstancedMesh(chairSurface.geometry, material, numParticles);
-	// const brushPoints = new THREE.InstancedMesh(brushSurface.geometry, material, numParticles);
-
-	// const posChair = new THREE.Vector3();
-	// const posBrush = new THREE.Vector3();
-
-	// const matrixC = new THREE.Matrix3();
-	// const matrixB = new THREE.Matrix3();
-	
-	// for ( let i = 0; i < numParticles; i ++ ) { // map rand points on model's surface
-	// 	chairSurface.sample(posChair);
-	// 	brushSurface.sample(posBrush);
-
-	// 	matrixC.makeTranslation(posChair.x, posChair.y, posChair.z);
-	// 	matrixB.makeTranslation(posBrush.x, posBrush.y, posBrush.z);
-
-	// 	console.log(matrixC)
-
-	// 	chairPoints.setMatrixAt( i, matrixC );
-	// 	brushPoints.setMatrixAt(i, matrixB);
-	// }
-
-	// console.log(chairPoints)
 
 	const posChair = new Float32Array(numParticles * 3); // large container, stores w/ indices
 	const posBrush = new Float32Array(numParticles * 3);
@@ -131,25 +107,20 @@ function createParticles() {
 		posBrush.set([tempPos.x, tempPos.y, tempPos.z], i * 3);
 	}
 
-	console.log('posChair', posChair);
-	console.log('posBrush', posBrush);
-
 	const pointMesh = new THREE.BufferGeometry();
 	pointMesh.setAttribute('position', new THREE.BufferAttribute(posChair, 3));
 	pointMesh.setAttribute('targetPosition', new THREE.BufferAttribute(posBrush, 3));
 	pointMesh.setDrawRange(0, numParticles);
 	pointMesh.computeBoundingSphere();
 
-	console.log(pointMesh);
-
 	points = new THREE.Points(pointMesh, material);
 	points.frustumCulled = false; 
 	
 	points.rotation.x = THREE.MathUtils.degToRad(90); // spawns in annoying
 	points.position.set(-1.1776, 0.918, 0.918)
+	points.visible = false;
 
 	scene.add(points);
-	console.log(points);
 };
 
 
@@ -176,7 +147,7 @@ function handleAnimations() {
 function chairAnimation() {
 	stats.update();
 
-	const position = AnimationData.stool[currentFrame];
+	const position = AnimationData.stool[frameCount];
 	const chairPos = scene.children[2].position;
 
 	chairPos.set(position.x, position.y, position.z);
@@ -184,10 +155,11 @@ function chairAnimation() {
 
 	renderer.render(scene, camera);
 
-	if(currentFrame == AnimationData.stool.length -1) {
+	if(frameCount == AnimationData.stool.length -1) {
+		frameCount = 0;
 		return transitionAnimation();
 	} else {
-		currentFrame ++;
+		frameCount ++;
 		requestAnimationFrame(chairAnimation);
 
 	}
@@ -196,152 +168,27 @@ function chairAnimation() {
 function transitionAnimation() {
 	chair.visible = false;
 	brush.visible = false;
-
+	points.visible = true;
 
 	const positions = points.geometry.attributes.position.array
 	const targets = scene.children[4].geometry.attributes.targetPosition.array;
 
+	if(frameCount < 25) {
+		frameCount ++;
+		console.log(((Math.log10(frameCount) ** 2)/45) + 1)
+		for (let i = 0; i < positions.length; i++) {
+			positions[i] = positions[i] * (((Math.log10(frameCount) ** 2)/45) + 1)
+			
+		}
 
-	for (let i = 0; i < positions.length; i++) {
-		// console.log(positions[i]);
-		// positions[i] = positions[i] * 1.01
-		positions[i] = THREE.MathUtils.lerp(positions[i], targets[i], .1);
+	} else {
+		for (let i = 0; i < positions.length; i++) {
+			positions[i] = THREE.MathUtils.lerp(positions[i], targets[i], .1);
+		}
 	}
 
-	// positions.map((position, index) => {
-	// 	position = THREE.MathUtils.lerp(position, targets[index], 1);
-	// })
 	scene.children[4].geometry.attributes.position.needsUpdate = true;
 	renderer.render(scene, camera);
 
 	requestAnimationFrame(transitionAnimation)
 }
-
-		// new Tween({ t: 0 })
-		// 	.to({ t: 1 }, 2000)
-		// 	.easing(Easing.Cubic.InOut)
-		// 	.onUpdate(({ t }) => {
-		// 		const pAttr = pointMesh.attributes.position.array;
-		// 		const tgt = pointMesh.attributes.targetPosition.array;
-		// 		for (let i = 0; i < pAttr.length; i++) {
-		// 			pAttr[i] = THREE.MathUtils.lerp(posA[i], tgt[i], t);
-		// 		}
-		// 		geo.attributes.position.needsUpdate = true;
-		// 	})
-		// 	.start();
-
-	function swapModelAnimation () {
-		const N = 500;
-		const chairMesh = scene.children[2].children[0].children[0];
-		const brushMesh = scene.children[3].children[0];
-
-		const chairSurface = new MeshSurfaceSampler(chairMesh).build();
-		const brushSurface = new MeshSurfaceSampler(brushMesh).build();
-
-		const posA = new Float32Array(N * 3);
-		const posB = new Float32Array(N * 3);
-		const tempPos = new THREE.Vector3();
-		
-		for (let i = 0; i < N; i++) {
-			chairSurface.sample(tempPos);
-			posA.set([tempPos.x, tempPos.y, tempPos.z], i * 3);
-			brushSurface.sample(tempPos);
-			posB.set([tempPos.x, tempPos.y, tempPos.z], i * 3);
-		}
-
-		// Build the particle geometry
-		const pointMesh = new THREE.BufferGeometry();
-		pointMesh.setAttribute('position', new THREE.BufferAttribute(posA.slice(), 3).setUsage( THREE.DynamicDrawUsage ));
-		pointMesh.setAttribute('targetPosition', new THREE.BufferAttribute(posB, 3));
-		pointMesh.setDrawRange(0, N);
-		pointMesh.computeBoundingSphere();
-
-		const material = new THREE.PointsMaterial({
-			size: 0.05,
-			sizeAttenuation: true,
-			color: 0x32cd32
-		});
-
-		const particles = new THREE.Points(pointMesh, material);
-		particles.frustumCulled = false; 
-		particles.geometry.attributes.position.needsUpdate = true;
-		scene.add(particles);
-
-		// Hide originals
-		scene.children[2].visible = false;
-		scene.children[3].visible = false;
-
-
-		renderer.render(scene, camera);
-
-		// 3️⃣ Optional “scatter” before reform:
-		//    you could loop over geo.attributes.position.array
-		//    and move them along a random dir × some radius
-
-		// 4️⃣ Tween from A→B
-		// new Tween({ t: 0 })
-		// 	.to({ t: 1 }, 2000)
-		// 	.easing(Easing.Cubic.InOut)
-		// 	.onUpdate(({ t }) => {
-		// 		const pAttr = pointMesh.attributes.position.array;
-		// 		const tgt = pointMesh.attributes.targetPosition.array;
-		// 		for (let i = 0; i < pAttr.length; i++) {
-		// 			pAttr[i] = THREE.MathUtils.lerp(posA[i], tgt[i], t);
-		// 		}
-		// 		geo.attributes.position.needsUpdate = true;
-		// 	})
-		// 	.start();
-		console.log(scene);
-						const p = pointMesh.attributes.position.array;
-				const tgt = pointMesh.attributes.targetPosition.array;
-				console.log('p and tgt', p, '\n', tgt)
-
-		new Tween({ t: 0 })
-			.to({ t: 1 }, 2000)
-			.easing(Easing.Cubic.InOut)
-			.onUpdate(function(o) {
-				const p = pointMesh.attributes.position.array;
-				const tgt = pointMesh.attributes.targetPosition.array;
-				console.log('p and tgt', p, '\n', tgt)
-				for (let i = 0; i < p.length; i++) {
-					p[i] = THREE.MathUtils.lerp(posA[i], tgt[i], o.t);
-				}
-				geometry.attributes.position.needsUpdate = true;
-			}).start();
-
-			console.log(Tween);
-
-			console.log('finished?');
-			Animate();
-}
-
-			function Animate() {
-				requestAnimationFrame(Animate);
-				// console.log(Tween);
-				// Tween.update();      // drive the tween each frame
-				// stats.update();
-				renderer.render(scene, camera);
-			}
-
-	// then make sure your animate loop looks like this:
-// new GLTFLoader().load(
-//   '../../Models/stool_2.glb',
-//   (gltf) => {
-// 		// Loads model
-//     model = gltf.scene;
-// 		model.rotation.x = THREE.MathUtils.degToRad( 90 )
-//     scene.add(model);
-
-// 		// sets x,y,z position vector.... seems to acts as a scalar and modifier of "path" of 
-// 		// animation, depending on input values. I truly don't understand how the position of the 
-// 		// camera can affect the rotation of the glb.... 
-// 		camera.position.set(1, 1, 1)
-
-//     animate();
-//   },
-//   undefined,
-//   (err) => console.error(err)
-// );
-
-// keep everything sized on window resize
-
