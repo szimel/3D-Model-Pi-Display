@@ -6,12 +6,12 @@ import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/twe
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 
-let scene, camera, renderer, stats;
+let scene, camera, renderer, stats, controls;
 let chair, brush, points, AnimationData;
 let frameCount = 0;
 let state = 'chair' | 'brush' | 'transition';
+state = 'chair';
 
-let controls;
 
 
 function setup() {
@@ -91,47 +91,61 @@ async function loadAssets() {
 
 // --- create model particles for transition --- \\
 function createParticles() {
-	const numParticles = 3000;
-	const chairMesh = scene.children[2].children[0].children[0];
-	const brushMesh = scene.children[3].children[0];
-	const material = new THREE.PointsMaterial({
-		size: .01,
-		sizeAttenuation: true,
-		color: 0x999999
-	});
-	// const material = chairMesh.material;
+	// config
+	const counts = { white: 1500, black: 3500 };
+	const materials = {
+		white: new THREE.PointsMaterial({ size: .0125, sizeAttenuation: true, color: 0x999999 }),
+		black: new THREE.PointsMaterial({ size: .0125, sizeAttenuation: true, color: 0x111111 })
+	};
 
-	testMesh();
+	const chairWhiteMesh = chair.children[0].children[0];
+	const chairBlackMesh = chair.children[0].children[1];
+	const brushMesh = brush.children[0];
 
-	const chairSurface = new MeshSurfaceSampler(chairMesh).build();
-	const brushSurface = new MeshSurfaceSampler(brushMesh).build();
+	const sampler = {
+		white: new MeshSurfaceSampler(chairWhiteMesh).build(),
+		black: new MeshSurfaceSampler(chairBlackMesh).build(),
+		brush: new MeshSurfaceSampler(brushMesh).build()
+	};
 
-	const posChair = new Float32Array(numParticles * 3); // large container, stores w/ indices
-	const posBrush = new Float32Array(numParticles * 3);
-	const tempPos = new THREE.Vector3();
+	// sample N points from a surface sampler
+	function samplePoints(surfSampler, N) {
+		const array = new Float32Array(N * 3);
+		const v = new THREE.Vector3();
 
-	for (let i = 0; i < numParticles; i++) { // grabs & stores random position along chair,brush surface
-		chairSurface.sample(tempPos);
-		posChair.set([tempPos.x, tempPos.y, tempPos.z], i * 3);
-		brushSurface.sample(tempPos);
-		posBrush.set([tempPos.x, tempPos.y, tempPos.z], i * 3);
+		for (let i = 0; i < N; i++) {
+			surfSampler.sample(v);
+			array.set([v.x, v.y, v.z], i * 3);
+		}
+		return array;
 	}
 
-	const pointMesh = new THREE.BufferGeometry();
-	pointMesh.setAttribute('position', new THREE.BufferAttribute(posChair, 3));
-	pointMesh.setAttribute('targetPosition', new THREE.BufferAttribute(posBrush, 3));
-	pointMesh.setDrawRange(0, numParticles);
-	pointMesh.computeBoundingSphere();
+	// create a points cloud with position & targetPosition
+	function makePointCloud(count, material, surfA, surfB) {
+		const posA = samplePoints(surfA, count);
+		const posB = samplePoints(surfB, count);
 
-	points = new THREE.Points(pointMesh, material);
-	points.frustumCulled = false; 
-	
-	points.rotation.x = THREE.MathUtils.degToRad(90); // spawns in annoying
-	points.position.set(-1.7, 0.922, .918)
+		const geometry = new THREE.BufferGeometry()
+			.setAttribute('position', new THREE.BufferAttribute(posA, 3).setUsage(THREE.DynamicDrawUsage))
+			.setAttribute('targetPosition', new THREE.BufferAttribute(posB, 3));
+
+		geometry.computeBoundingSphere();
+
+		return new THREE.Points(geometry, material);
+	}
+
+	const pointsW = makePointCloud(counts.white, materials.white, sampler.white, sampler.brush);
+	const pointsB = makePointCloud(counts.black, materials.black, sampler.black, sampler.brush);
+
+	// group & position them together
+	points = new THREE.Group();
+	points.add(pointsW, pointsB);
+	points.rotation.x = THREE.MathUtils.degToRad(90);
+	points.position.set(-1.7, 0.922, 0.918);
 	points.visible = false;
 
 	scene.add(points);
-};
+}
 
 
 // --- load everything in order --- \\
@@ -140,12 +154,10 @@ async function init() {
 	setup();
 	await loadAssets();
 	createParticles();
-
-	state = 'chair';
 	animate();
 }
 
-
+let transitionStarted = true;
 // --- --- \\
 function animate(time) {
 	requestAnimationFrame(animate);
@@ -154,7 +166,14 @@ function animate(time) {
 
 	switch(state) {
 		case 'chair': updateChair(); break;
-		case 'transition': startTweenTransition(); break;
+		case 'transition': {
+			if(transitionStarted) {
+				console.log('rIRANIRANIRANIRAN&&&&&&&&&&&&&&&&&&&&&&&&&&&&an')
+				transitionStarted = false;
+				startTweenTransition();
+			}
+			break;
+		}
 		case 'brush': return;
 	}
 
@@ -177,25 +196,32 @@ function updateChair() {
 
 function startTweenTransition() {
 	// hide the originals
-	// chair.visible = brush.visible = false;
+	chair.visible = brush.visible = false;
 	points.visible = true;
+	// console.log(points);
 
 	// capture initial & target arrays for each point
-	const start = points.geometry.attributes.position.array;
-	const target = points.geometry.attributes.targetPosition.array;
-
+	let startW = points.children[0].geometry.attributes.position;
+	let startB = points.children[1].geometry.attributes.position;
+	const targetW = points.children[0].geometry.attributes.targetPosition.array;
+	const targetB = points.children[1].geometry.attributes.targetPosition.array;
 
 	new Tween.Tween({ t:0 })
-		.to({ t: .005 }, 4000)
-		.easing(Easing.Exponential.Out)
+		.to({ t: 1 }, 4000)
+		.easing(Easing.Exponential.In)
 		.onUpdate(o => {
-		frameCount++
+		// function calcStep(start, targetArr) {
+		// 	for (let i = 0; i < start.array.length; i++) {
+		// 		const endPos = THREE.MathUtils.lerp(start.array[i], targetArr[i], o.t);
+		// 		start.array[i] = endPos;
+		// 	}
 
-		for (let i = 0; i < start.length; i++) {
-			const endPos = THREE.MathUtils.lerp(start[i], target[i], o.t);
-			start[i] = endPos;
-		}
-		points.geometry.attributes.position.needsUpdate = true;
+		// 	start.needsUpdate = true;
+		// 	return start;
+		// }
+		
+		// startW = calcStep(startW, targetW);
+		// startB = calcStep(startB, targetB);
 
 		}).onComplete(() => {
 			state = 'brush';
