@@ -92,7 +92,7 @@ async function loadAssets() {
 // --- create model particles for transition --- \\
 function createParticles() {
 	// config
-	const counts = { white: 1500, black: 3500 };
+	const counts = { white: 4000, black: 1500 };
 	const materials = {
 		white: new THREE.PointsMaterial({ size: .0125, sizeAttenuation: true, color: 0x999999 }),
 		black: new THREE.PointsMaterial({ size: .0125, sizeAttenuation: true, color: 0x111111 })
@@ -181,6 +181,13 @@ function animate(time) {
 }
 
 function updateChair() {
+	const r = Date.now() * .0005;
+
+	// chair.position.x = 700 * Math.cos( r );
+	// chair.position.z = 700 * Math.sin( r );
+	// chair.position.y = 700 * Math.sin( r );
+
+	// camera.lookAt(chair.position);
 	const path = AnimationData.stool;
 
 	if (frameCount < path.length) {
@@ -198,7 +205,6 @@ function startTweenTransition() {
 	// hide the originals
 	chair.visible = brush.visible = false;
 	points.visible = true;
-	// console.log(points);
 
 	// capture initial & target arrays for each point
 	let startW = points.children[0].geometry.attributes.position;
@@ -207,54 +213,43 @@ function startTweenTransition() {
 	const targetB = points.children[1].geometry.attributes.targetPosition.array;
 
 	new Tween.Tween({ t:0 })
-		.to({ t: 1 }, 4000)
-		.easing(Easing.Exponential.In)
+		.to({ t: 1 }, 8000)
+		.easing(Easing.Exponential.Out)
 		.onUpdate(o => {
-		// function calcStep(start, targetArr) {
-		// 	for (let i = 0; i < start.array.length; i++) {
-		// 		const endPos = THREE.MathUtils.lerp(start.array[i], targetArr[i], o.t);
-		// 		start.array[i] = endPos;
-		// 	}
+		function calcStep(start, targetArr) {
+			for (let i = 0; i < start.array.length; i++) {
+				const endPos = THREE.MathUtils.lerp(start.array[i], targetArr[i], o.t);
+				start.array[i] = endPos;
+			}
 
-		// 	start.needsUpdate = true;
-		// 	return start;
-		// }
+			// 	// points.position.set(-1.7, 0.922, 0.918);
+			// // const {x, y, z} = {x: -1.7, y: 0.922, z:.918};
+			// const {x, y, z} = points.position;
+			// points.position.set(x + .01, y, z + o.t/2);
+			// // console.log(x + o.t/10)
+			// camera.lookAt(points.position);
+			// start.needsUpdate = true;
+
+			return start;
+		}
+
+		console.log('cam', camera.position);
+		console.log('brush', brush.position);
 		
-		// startW = calcStep(startW, targetW);
-		// startB = calcStep(startB, targetB);
+		startW = calcStep(startW, targetW);
+		startB = calcStep(startB, targetB);
+
+		// camera moves in a circle, don't have to center on brush because on same y level. Just tell it to look at it
+		const circleRadius = 2;
+		const circleSpeed  = 2;  
+
+		const theta = o.t * Math.PI;
+		camera.position.x = brush.position.x + circleRadius * Math.cos(theta);
+		camera.position.z = brush.position.z + circleRadius * Math.sin(theta);
+		camera.lookAt(brush.position);
 
 		}).onComplete(() => {
 			state = 'brush';
 		})
 		.start();
 }
-
-
-// function transitionAnimation() {
-// 	chair.visible = false;
-// 	brush.visible = false;
-// 	points.visible = true;
-
-// 	const positions = points.geometry.attributes.position.array
-// 	const targets = scene.children[4].geometry.attributes.targetPosition.array;
-
-// 	if(frameCount < 25) {
-// 		frameCount ++;
-// 		console.log(((Math.log10(frameCount) ** 2)/45) + 1)
-// 		for (let i = 0; i < positions.length; i++) {
-// 			// positions[i] = positions[i] * (((Math.log10(frameCount) ** 2)/45) + 1)
-// 			positions[i] = positions[i] * (1 + Math.random() * 0.04);
-
-// 		}
-
-// 	} else {
-// 		for (let i = 0; i < positions.length; i++) {
-// 			positions[i] = THREE.MathUtils.lerp(positions[i], targets[i], .1);
-// 		}
-// 	}
-
-// 	scene.children[4].geometry.attributes.position.needsUpdate = true;
-// 	renderer.render(scene, camera);
-
-// 	requestAnimationFrame(transitionAnimation)
-// }
