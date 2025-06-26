@@ -26,8 +26,7 @@ function setup() {
 	document.body.appendChild(stats.dom);
 
 	camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 10);
-	camera.position.set(1, 1, 1);
-	camera.lookAt(0, 0, 0);    
+	camera.position.set(1.5, 0, 0);
 
 	controls = new OrbitControls(camera, renderer.domElement);
 
@@ -41,23 +40,7 @@ function setup() {
 		camera.updateProjectionMatrix();
 		renderer.setSize(window.innerWidth, window.innerHeight);
 	});
-	document.addEventListener('keydown', onKeyDown);
 };
-function onKeyDown(event) {
-	switch (event.keyCode) {
-	case 79: // O
-		const lookingAt = new THREE.Vector3();
-		camera.getWorldDirection(lookingAt)
-		camera.lookAt(points.position)
-		break;
-	case 80: // P
-		const idk = new THREE.Vector3();
-		camera.getWorldDirection(idk)
-		// camera.lookAt(idk.x, idk.y + .33, idk.z)
-		camera.lookAt(points);
-		break;
-	}
-}
 
 
 // --- load & set json and glb's --- \\
@@ -76,8 +59,8 @@ async function loadAssets() {
 
 		// manual orientation bc i suck at blender
 		chair.rotation.x = THREE.MathUtils.degToRad(90);
-		chair.position.set(1.776, 0.918, 0.918)
-		brush.position.set(-1.766, 0.918, 1.118);
+		// chair.position.set(0, 0, 0);
+		// brush.position.set(-1.766, 0.918, 1.118);
 		brush.visible = false;
 
 		scene.add(chair, brush);
@@ -157,6 +140,7 @@ async function init() {
 	animate();
 }
 
+
 let transitionStarted = true;
 // --- --- \\
 function animate(time) {
@@ -180,16 +164,10 @@ function animate(time) {
 	renderer.render(scene, camera);
 }
 
+const array = [];
+
 function updateChair() {
-	const r = Date.now() * .0005;
-
-	// chair.position.x = 700 * Math.cos( r );
-	// chair.position.z = 700 * Math.sin( r );
-	// chair.position.y = 700 * Math.sin( r );
-
-	// camera.lookAt(chair.position);
 	const path = AnimationData.stool;
-
 	if (frameCount < path.length) {
 		const { x, y, z } = path[frameCount++];
 		chair.position.set(x, y, z);
