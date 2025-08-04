@@ -13,6 +13,7 @@ let state = {
 	currentAnimation: 'chair',
 	frameCount: 0,
 	transitionStarted: false,
+	reverse: false,
 	arrays: {
 		white: {
 			og: [],
@@ -100,13 +101,13 @@ async function loadAssets() {
 
 		chair.traverse(node => {
 			if(node.isMesh) {
-				node.material.opacity = 0;
 				node.material.transparent = true;
 			}
 		})
 
 		brush.traverse(node => {
 			if(node.isMesh) {
+				node.material.opacity = 0  // only do brush as we start with state.currentAnimation = 'chair'
 				node.material.transparent = true;
 			}
 		})
@@ -186,7 +187,7 @@ function createParticles() {
 	points.add(pointsW, pointsB);
 	points.rotation.x = THREE.MathUtils.degToRad(90);
 	points.position.set(-0.046, -1, -1.995); // match end frame of chair animation
-	points.visible = true;
+	points.visible = false; // start on currentAnimation = 'chair'
 
 	// set state and save points coords for white and black target and original positions 
 	const [ whitePts, blackPts ] = points.children;
@@ -225,16 +226,21 @@ function animate(time) {
     case 'chair':
       modelAnimation(chair, false);
       break;
+		case 'chairFade': 
+			modelFadeSwitch(chair, state.reverse);
+			break;
     case 'transition':
-      if (!state.transitionStarted) {
-        chair.visible = false;
-        state.transitionStarted = true;
-        startTweenTransition();
-      }
+			if (!state.transitionStarted) {
+				state.transitionStarted = true;
+				startTweenTransition();
+			}
       break;
     case 'brush':
       modelAnimation(brush, true);
       break;
+		case 'brushFade': 
+			modelFadeSwitch(brush, state.reverse);
+			break;
 		case 'state':
 			manageState()
   }
@@ -242,8 +248,21 @@ function animate(time) {
   renderer.render(scene, camera);
 }
 
-function manageState() {
-
+function modelFadeSwitch(model, reverse) {
+	if(!fadeStep(model, reverse)) {
+		points.position.copy(model.position);
+		state.frameCount ++;
+	} else if(reverse) {
+		points.visible = false;
+		state.currentAnimation = state.prevAnimation === 'chair' ? 'brush' : 'chair';
+		state.prevAnimation = 'transition';
+		state.frameCount = 0; // TODO: change??
+	} else {
+		model.visible = false;
+		state.transitionStarted = false;
+		state.currentAnimation = 'transition';
+		state.frameCount = 0; // TODO: change??
+	}
 }
 
 
@@ -254,83 +273,73 @@ function modelAnimation(model, reverse) {
 		//determine pos/frame for model
 		const frame = reverse ? (path.length - 1 - frameCount) : frameCount;
 
-		// fade in model + fade out points (over 200 frames)
-		if(frameCount < 200) {
-			points.position.copy(model.position);
-			fadeModels(model, true);
-			// console.log('###########');
-			// console.log('model', model.position);
-			// console.log('points', points.position)
-			// console.log('%%%%%%%%%%%%%%%')
-			// console.log(points)
-			// points.children.map(point => console.log(point))
-			// console.log('%%%%%%%%%%%%%%%')
-			// console.log(brush)
-			// brush.children.map(point => console.log(point))
-			// console.log('###########');
-		} else {points.visible = false}
-
 		//update camera + model position
 		const { x, y, z } = path[frame];
 		model.position.set(x, y, z);
 		camera.lookAt(model.position)
-
-		// fade-out model + fade-in points over the last 200 frames
-		if (frameCount > path.length - 200) {
-			points.visible = true;
-			points.position.copy(model.position);
-			fadeModels(model, false);
-		}
-
 		state.frameCount++;
+
+
 	} else {
-		//too dumb to think of better state management
-		if(state.currentAnimation === 'chair') {chair.visible = false}
-		else {brush.visible = false}
 		state.frameCount = 0;
 		state.prevAnimation = state.currentAnimation;
-		state.currentAnimation = 'transition';
-		console.log('modelAnimation', state);
+		const nextStep = state.currentAnimation === 'chair' ? 'chairFade' : 'brushFade';
+		state.currentAnimation = nextStep;
+		state.reverse = false;
+		points.visible = true;
 	}
 }
 
-// takes model arg and flips opacity of it & points, depending on bool arg
-function fadeModels(model, reverse) {
-	if(reverse) { 	// called from transition to fade in model + fade out points
-		model.traverse(node => {
-			if (node.isMesh) {node.material.opacity = Math.min(1, node.material.opacity + 0.005);}
-		});
-		points.children.forEach(pt => pt.material.opacity = Math.max(0, pt.material.opacity - 0.005))
+// Fade model ↔ points in or out by Δ each call.
+function fadeStep(model, reverse, delta = 0.005) {
+  // Determine targets
+  const modelTarget  = reverse ? 1 : 0;
+  const pointsTarget = reverse ? 0 : 1;
 
-	} else { 	// called from modelAnimation to fade out model + fade in points
-		model.traverse(node => {
-			if (node.isMesh) {node.material.opacity = Math.max(0, node.material.opacity - 0.005);}
-		});
-		points.children.forEach(pt => pt.material.opacity = Math.min(1, pt.material.opacity + 0.005))
-	}
+  // We'll flip to false if *any* opacity isn't at target yet.
+  let allDone = true;
+
+  // 1) Fade the model’s meshes
+  model.traverse(node => {
+    if (!node.isMesh) return;
+    // move it toward the target
+    node.material.opacity = THREE.MathUtils.clamp(
+      node.material.opacity + (reverse ? +delta : -delta),
+      0, 1
+    );
+    // if it’s not quite at the target, we’re not done
+    if (node.material.opacity !== modelTarget) allDone = false;
+  });
+
+  // 2) Fade the point clouds
+  points.children.forEach(pt => {
+    pt.material.opacity = THREE.MathUtils.clamp(
+      pt.material.opacity + (reverse ? -delta : +delta),
+      0, 1
+    );
+    if (pt.material.opacity !== pointsTarget) allDone = false;
+  });
+
+  return allDone;
 }
 
 function startTweenTransition() {
-	// this code (in between function start and tween) only runs once. Have to use it to manage state
-	if(state.prevAnimation === 'chair') {
-		brush.visible = true;
-		chair.visible = false;
-	} else {
-		chair.visible = true;
-		brush.visible = false;
-	}
 	const [whitePts, blackPts] = points.children;
-	let color, whiteTarget, blackTarget;
+	let color, model, whiteTarget, blackTarget, nextStep;
 
 	// prob better way to do this but didn't want a ton of = bool ? ___ : ___;
 	switch (state.prevAnimation) {
 		case 'chair':
+			nextStep     = 'brushFade';
+			model        = brush;
 			color        = state.colors.orange;
 			whiteTarget  = state.arrays.white.target;
 			blackTarget  = state.arrays.black.target;
 			break;
 
 		case 'brush':
+			nextStep     = 'chairFade';
+			model        = chair;
 			color        = state.colors.white;
 			whiteTarget  = state.arrays.white.og;
 			blackTarget  = state.arrays.black.og;
@@ -367,12 +376,12 @@ function startTweenTransition() {
 		calcStep(blackPts, blackTarget, false);
 		state.frameCount++;
 
+		// animation has ended, move to next step
 		if(state.frameCount === 150) {
-			state.transitionStarted = false;
-			state.currentAnimation = state.prevAnimation === 'chair' ? 'brush' : 'chair';
-			state.prevAnimation = 'transition';
 			state.frameCount = 0;
-			console.log('transition', state);
+			model.visible = true;
+			state.currentAnimation = nextStep;
+			state.reverse = true;
 		} 
 	})
 	.start();
