@@ -3,7 +3,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 import Stats from 'three/addons/libs/stats.module.js';
 import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/tween.esm.js'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // global vars for threejs/scene
 let scene, camera, renderer, stats, chair, brush, points, AnimationData;
@@ -265,7 +264,6 @@ function modelFadeSwitch(model, reverse) {
 	}
 }
 
-
 function modelAnimation(model, reverse) {
 	const path = AnimationData.stool;
 	let { frameCount } = state;
@@ -291,7 +289,7 @@ function modelAnimation(model, reverse) {
 }
 
 // Fade model ↔ points in or out by Δ each call.
-function fadeStep(model, reverse, delta = 0.005) {
+function fadeStep(model, reverse, delta = 0.01) {
   // Determine targets
   const modelTarget  = reverse ? 1 : 0;
   const pointsTarget = reverse ? 0 : 1;
