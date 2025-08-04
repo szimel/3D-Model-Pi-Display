@@ -5,13 +5,37 @@ import Stats from 'three/addons/libs/stats.module.js';
 import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/tween.esm.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// global vars for threejs/scene
+let scene, camera, renderer, stats, chair, brush, points, AnimationData;
 
-let scene, camera, renderer, stats, controls;
-let chair, brush, points, AnimationData;
-let frameCount = 0;
-let state = 'chair' | 'brush' | 'transition';
-state = 'chair';
-
+let state = {
+	prevAnimation: null,
+	currentAnimation: 'chair',
+	frameCount: 0,
+	transitionStarted: false,
+	arrays: {
+		white: {
+			og: [],
+			target: []
+		},
+		black: {
+			og: [],
+			target: []
+		},
+	},
+	colors: {
+		orange: {
+			r: 145/255,
+			g: 50/255,
+			b: 20/255
+		},
+    white: {
+			r: 1,
+			g: 1,
+			b: 1
+		}
+	}
+}
 
 
 function setup() {
@@ -27,8 +51,6 @@ function setup() {
 
 	camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 10);
 	camera.position.set(1.5, 0, 0);
-
-	controls = new OrbitControls(camera, renderer.domElement);
 
 	scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
 	const dir = new THREE.DirectionalLight(0xffffff, 1);
@@ -52,32 +74,50 @@ async function loadAssets() {
 			loader.loadAsync('../../Models/stool.glb'),
 			loader.loadAsync('../../Models/brush_2.glb')
 		]);
-
 		AnimationData = json;
 		chair = chairGLB.scene;
 		brush = brushGLB.scene;
 
-		// manual orientation bc i suck at blender
-		chair.rotation.x = THREE.MathUtils.degToRad(90);
-		// chair.position.set(-0.046, -1, -1.995); // chair animation start frame location
-		// brush.position.set(-0.046, -1, -1.8); // a little offset because (0,0,0) isn't middle of chair animation
+		// resets all mesh data that comes in weird from glb models
+		brush.updateMatrixWorld(true); // flatten the world matrices
+		brush.traverse(node => {
+			if (node.isMesh) {
+				node.updateMatrix();
+				node.geometry.applyMatrix4(node.matrix);
+				node.matrix.identity();
+				node.position.set(0, 0, 0);
+				node.rotation.set(0, 0, 0);
+				node.scale.set(1, 1, 1);
+			}
+		});
+
+		brush.scale.set(1,1,1);
+		brush.position.set(-0.034, -1, -1.997);
 		brush.rotation.x = THREE.MathUtils.degToRad(90);
+		brush.visible = false;
 
-		// updates values scene uses? 
-		chair.updateMatrixWorld(true);
-		brush.updateMatrixWorld(true);
+		chair.rotation.x = THREE.MathUtils.degToRad(90);
 
+		chair.traverse(node => {
+			if(node.isMesh) {
+				node.material.opacity = 0;
+				node.material.transparent = true;
+			}
+		})
 
+		brush.traverse(node => {
+			if(node.isMesh) {
+				node.material.transparent = true;
+			}
+		})
+		
 		scene.add(chair, brush);
 		console.log('scene', AnimationData.stool.length, scene);
-		brush.visible = true;
-
 
 	}catch (err) {
 		console.error('Error loading glb model:', err);
 	};
 };
-
 
 // --- create model particles for transition --- \\
 function createParticles() {
@@ -90,7 +130,7 @@ function createParticles() {
 		black: new THREE.PointsMaterial({ size: .0125, sizeAttenuation: true, color: 0x111111 })
 	};
 
-	// models both have two different sections. Grab them here
+	// models both have two different sections. Grab them
 	const chairWhiteMesh = chair.children[0].children[0];
 	const chairBlackMesh = chair.children[0].children[1];
 	const brushBodyMesh = brush.children[0];
@@ -127,17 +167,17 @@ function createParticles() {
 
 		geometry.computeBoundingSphere();
 
-		return new THREE.Points(geometry, material);
+		const point = new THREE.Points(geometry, material);
+		point.material.transparent = true;
+		point.material.opacity = 0;
+
+		return point;
 	}
 
 	const pointsW = makePointCloud(counts.white, materials.white, sampler.white, sampler.brushBody);
 	const pointsB = makePointCloud(counts.black, materials.black, sampler.black, sampler.brushTip);
 
 	// set transparency here (for later animations)
-	pointsW.material.transparent = true;
-	pointsW.material.opacity = 0;
-	pointsB.material.transparent = true;
-	pointsB.material.opacity = 0;
 	chairWhiteMesh.material.transparent = true;
 	chairBlackMesh.material.transparent = true;
 
@@ -146,7 +186,20 @@ function createParticles() {
 	points.add(pointsW, pointsB);
 	points.rotation.x = THREE.MathUtils.degToRad(90);
 	points.position.set(-0.046, -1, -1.995); // match end frame of chair animation
-	points.visible = false;
+	points.visible = true;
+
+	// set state and save points coords for white and black target and original positions 
+	const [ whitePts, blackPts ] = points.children;
+	state.arrays = {
+		white: {
+			og: new Float32Array(whitePts.geometry.attributes.position.array),
+			target: whitePts.geometry.attributes.targetPosition.array
+		},
+		black: {
+			og: new Float32Array(blackPts.geometry.attributes.position.array),
+			target: blackPts.geometry.attributes.targetPosition.array
+		}
+	};
 
 	scene.add(points);
 }
@@ -162,95 +215,167 @@ async function init() {
 }
 
 
-let transitionStarted = false;
 // --- --- \\
 function animate(time) {
-	requestAnimationFrame(animate);
-	stats.update();
-	Tween.update(time);
+  requestAnimationFrame(animate);
+  stats.update();
+  Tween.update(time);
 
-	switch(state) {
-		case 'chair': {
-			updateChair();
-			break;
-		}
-		case 'transition': {
-			if(!transitionStarted) {
-				transitionStarted = true;
-				startTweenTransition();
-			}
-			break;
-		}
-		case 'brush': {
-			return;
-		}
-	}
+  switch (state.currentAnimation) {
+    case 'chair':
+      modelAnimation(chair, false);
+      break;
+    case 'transition':
+      if (!state.transitionStarted) {
+        chair.visible = false;
+        state.transitionStarted = true;
+        startTweenTransition();
+      }
+      break;
+    case 'brush':
+      modelAnimation(brush, true);
+      break;
+		case 'state':
+			manageState()
+  }
 
-	renderer.render(scene, camera);
+  renderer.render(scene, camera);
 }
 
-function updateChair() {
+function manageState() {
+
+}
+
+
+function modelAnimation(model, reverse) {
 	const path = AnimationData.stool;
-	if (frameCount < path.length) {
-		const { x, y, z } = path[frameCount++];
-		chair.position.set(x, y, z);
-		camera.lookAt(chair.position);
+	let { frameCount } = state;
+	if (frameCount < path.length - 1) {
+		//determine pos/frame for model
+		const frame = reverse ? (path.length - 1 - frameCount) : frameCount;
 
-		// transparency switch of chair + chair points
-		if(frameCount > AnimationData.stool.length - 200) {
+		// fade in model + fade out points (over 200 frames)
+		if(frameCount < 200) {
+			points.position.copy(model.position);
+			fadeModels(model, true);
+			// console.log('###########');
+			// console.log('model', model.position);
+			// console.log('points', points.position)
+			// console.log('%%%%%%%%%%%%%%%')
+			// console.log(points)
+			// points.children.map(point => console.log(point))
+			// console.log('%%%%%%%%%%%%%%%')
+			// console.log(brush)
+			// brush.children.map(point => console.log(point))
+			// console.log('###########');
+		} else {points.visible = false}
+
+		//update camera + model position
+		const { x, y, z } = path[frame];
+		model.position.set(x, y, z);
+		camera.lookAt(model.position)
+
+		// fade-out model + fade-in points over the last 200 frames
+		if (frameCount > path.length - 200) {
 			points.visible = true;
-			points.position.set(x, y, z); // HERE, points aren't visible? 
-
-			chair.children[0].children.map(child => child.material.opacity = Math.max(0, child.material.opacity - .005));
-			points.children.map(child => child.material.opacity = Math.min(1, child.material.opacity + .005));
-			console.log(points.children[0].material.opacity);
+			points.position.copy(model.position);
+			fadeModels(model, false);
 		}
+
+		state.frameCount++;
 	} else {
-		chair.visible = false;
-		frameCount = 0;
-		state = 'transition';
+		//too dumb to think of better state management
+		if(state.currentAnimation === 'chair') {chair.visible = false}
+		else {brush.visible = false}
+		state.frameCount = 0;
+		state.prevAnimation = state.currentAnimation;
+		state.currentAnimation = 'transition';
+		console.log('modelAnimation', state);
+	}
+}
+
+// takes model arg and flips opacity of it & points, depending on bool arg
+function fadeModels(model, reverse) {
+	if(reverse) { 	// called from transition to fade in model + fade out points
+		model.traverse(node => {
+			if (node.isMesh) {node.material.opacity = Math.min(1, node.material.opacity + 0.005);}
+		});
+		points.children.forEach(pt => pt.material.opacity = Math.max(0, pt.material.opacity - 0.005))
+
+	} else { 	// called from modelAnimation to fade out model + fade in points
+		model.traverse(node => {
+			if (node.isMesh) {node.material.opacity = Math.max(0, node.material.opacity - 0.005);}
+		});
+		points.children.forEach(pt => pt.material.opacity = Math.min(1, pt.material.opacity + 0.005))
 	}
 }
 
 function startTweenTransition() {
-	// capture target arrays + color
-	const targetW = points.children[0].geometry.attributes.targetPosition.array;
-	const targetB = points.children[1].geometry.attributes.targetPosition.array;
-	const targetColor = {
-		"r": 0.04817182422013895,
-		"g": 0.04817182422013895,
-		"b": 0.04817182422013895
+	// this code (in between function start and tween) only runs once. Have to use it to manage state
+	if(state.prevAnimation === 'chair') {
+		brush.visible = true;
+		chair.visible = false;
+	} else {
+		chair.visible = true;
+		brush.visible = false;
 	}
+	const [whitePts, blackPts] = points.children;
+	let color, whiteTarget, blackTarget;
+
+	// prob better way to do this but didn't want a ton of = bool ? ___ : ___;
+	switch (state.prevAnimation) {
+		case 'chair':
+			color        = state.colors.orange;
+			whiteTarget  = state.arrays.white.target;
+			blackTarget  = state.arrays.black.target;
+			break;
+
+		case 'brush':
+			color        = state.colors.white;
+			whiteTarget  = state.arrays.white.og;
+			blackTarget  = state.arrays.black.og;
+			break;
+	}
+	const { r: R, g: G, b: B } = color;
 
 	new Tween.Tween({ t:0 })
-		.to({ t: .05 }, 8000)
+		.to({ t: .05 }, 3000)
 		.easing(Easing.Exponential.Out)
 		.onUpdate(o => {
-		function calcStep(startMesh, targetArr) {
-			let posArr = startMesh.geometry.attributes.position.array;
-			let startColor = startMesh.material.color;
+		function calcStep(points, target, bool) {
+			let posArr = points.geometry.attributes.position.array;
+			let startColor = points.material.color;
+
+			if(posArr[0] === target[0]) {console.log("FUCK")}
 
 			for (let i = 0; i < posArr.length; i++) {
-				const endPos = THREE.MathUtils.lerp(posArr[i], targetArr[i], o.t);
+				const endPos = THREE.MathUtils.lerp(posArr[i], target[i], o.t);
 				posArr[i] = endPos;
 			}
-			const r = THREE.MathUtils.lerp(startColor.r, targetColor.r, o.t);
-			const g = THREE.MathUtils.lerp(startColor.g, targetColor.g, o.t);
-			const b = THREE.MathUtils.lerp(startColor.b, targetColor.b, o.t);
-			startColor.setRGB(r, g, b);
 
-			startMesh.geometry.attributes.position.needsUpdate = true;
+			if(bool) {
+				const r = THREE.MathUtils.lerp(startColor.r, R, o.t);
+				const g = THREE.MathUtils.lerp(startColor.g, G, o.t);
+				const b = THREE.MathUtils.lerp(startColor.b, B, o.t);
+				startColor.setRGB(r, g, b);
+			}
+
+			points.geometry.attributes.position.needsUpdate = true;
 		}
 		
-		calcStep(points.children[0], targetW);
-		calcStep(points.children[1], targetB);
+		calcStep(whitePts, whiteTarget, true);
+		calcStep(blackPts, blackTarget, false);
+		state.frameCount++;
 
-		frameCount++;
-
-		}).onComplete(() => {
-			state = 'brush';
-		})
-		.start();
+		if(state.frameCount === 150) {
+			state.transitionStarted = false;
+			state.currentAnimation = state.prevAnimation === 'chair' ? 'brush' : 'chair';
+			state.prevAnimation = 'transition';
+			state.frameCount = 0;
+			console.log('transition', state);
+		} 
+	})
+	.start();
 }
 
 
