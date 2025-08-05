@@ -1,0 +1,19 @@
+{
+  "name": "pi-code",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild ./pi-viewer.js --bundle --outfile=dist/bundle.js --format=esm"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tweenjs/tween.js": "^25.0.0",
+    "three": "^0.177.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.8"
+  }
+}

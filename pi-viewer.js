@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 import Stats from 'three/addons/libs/stats.module.js';
-import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/tween.esm.js'
+import Tween, { Easing } from '@tweenjs/tween.js';
+
 
 // global vars for threejs/scene
 let scene, camera, renderer, stats, chair, brush, points, AnimationData;
@@ -71,8 +72,8 @@ async function loadAssets() {
 		const loader = new GLTFLoader();
 		const [json, chairGLB, brushGLB] = await Promise.all([
 			fetch('./path-data.json').then(r=>r.json()),
-			loader.loadAsync('../../Models/stool.glb'),
-			loader.loadAsync('../../Models/brush_2.glb')
+			loader.loadAsync('./Models/stool.glb'),
+			loader.loadAsync('./Models/brush_2.glb')
 		]);
 		AnimationData = json;
 		chair = chairGLB.scene;
