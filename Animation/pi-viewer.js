@@ -71,8 +71,8 @@ async function loadAssets() {
 		const loader = new GLTFLoader();
 		const [json, chairGLB, brushGLB] = await Promise.all([
 			fetch('./path-data.json').then(r=>r.json()),
-			loader.loadAsync('../../Models/stool.glb'),
-			loader.loadAsync('../../Models/brush_2.glb')
+			loader.loadAsync('../Models/stool.glb'),
+			loader.loadAsync('../Models/brush_2.glb')
 		]);
 		AnimationData = json;
 		chair = chairGLB.scene;
