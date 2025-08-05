@@ -1,12 +1,10 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
-import Stats from 'three/addons/libs/stats.module.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
 import Tween, { Easing } from '@tweenjs/tween.js';
 
-
 // global vars for threejs/scene
-let scene, camera, renderer, stats, chair, brush, points, AnimationData;
+let scene, camera, renderer, chair, brush, points, AnimationData;
 
 let state = {
 	prevAnimation: null,
@@ -38,17 +36,14 @@ let state = {
 	}
 }
 
-
 function setup() {
 	scene = new THREE.Scene();
 	scene.background = new THREE.Color(0xD2B48C); // tan
 
-	stats = new Stats();
 	renderer = new THREE.WebGLRenderer({ antialias: true });
 	renderer.setSize(window.innerWidth, window.innerHeight);
 	renderer.outputEncoding = THREE.sRGBEncoding;
 	document.body.appendChild(renderer.domElement);
-	document.body.appendChild(stats.dom);
 
 	camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 10);
 	camera.position.set(1.5, 0, 0);
@@ -64,7 +59,6 @@ function setup() {
 		renderer.setSize(window.innerWidth, window.innerHeight);
 	});
 };
-
 
 // --- load & set json and glb's --- \\
 async function loadAssets() {
@@ -205,7 +199,6 @@ function createParticles() {
 	scene.add(points);
 }
 
-
 // --- load everything in order --- \\
 init();
 async function init() {
@@ -219,7 +212,6 @@ async function init() {
 // --- --- \\
 function animate(time) {
   requestAnimationFrame(animate);
-  stats.update();
   Tween.update(time);
 
   switch (state.currentAnimation) {
@@ -354,8 +346,6 @@ function startTweenTransition() {
 			let posArr = points.geometry.attributes.position.array;
 			let startColor = points.material.color;
 
-			if(posArr[0] === target[0]) {console.log("FUCK")}
-
 			for (let i = 0; i < posArr.length; i++) {
 				const endPos = THREE.MathUtils.lerp(posArr[i], target[i], o.t);
 				posArr[i] = endPos;
@@ -385,7 +375,6 @@ function startTweenTransition() {
 	})
 	.start();
 }
-
 
 // /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
 // --disable-web-security \
