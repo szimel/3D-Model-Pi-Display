@@ -4,7 +4,7 @@
   "description": "",
   "main": "pi.html",
   "scripts": {
-    "build": "esbuild ./pi-viewer.js --bundle --outfile=dist/bundle.js --format=esm"
+    "build": "esbuild ./Code/pi-viewer.js --bundle --outfile=./Code/dist/bundle.js --format=esm"
   },
   "keywords": [],
   "author": "",
