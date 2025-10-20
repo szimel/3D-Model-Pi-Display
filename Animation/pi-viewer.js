@@ -288,6 +288,10 @@ function modelAnimation(model, reverse) {
 	}
 }
 
+function startTweenFade() {
+	
+}
+
 // Fade model ↔ points in or out by Δ each call.
 function fadeStep(model, reverse, delta = 0.01) {
   // Determine targets
