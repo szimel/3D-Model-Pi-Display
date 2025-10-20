@@ -286,50 +286,66 @@ function startFadeTween(model) {
   const target = (model.name === 'chair') ? Number(!s) : Number(s); // 0 or 1
 
   // collect mesh materials once (handles single or array materials)
-  const meshMats = [];
 	let count = 0
 
 	// THIS FIXES THE BLINK PROBLEM
-	model.traverse(node => { 
-		if (!node.isMesh) return;
-		node.material.transparent = true 
-	})
-  // model.traverse(n => {
-  //   if (n.isMesh && n.material) {
-	// 		count++
-	// 		console.log('count', count);
-  //     if (Array.isArray(n.material)) { meshMats.push(...n.material.filter(Boolean)) }
-  //     else { meshMats.push(n.material) }
-  //   }
-  // });
-  // meshMats.forEach(m => m.transparent = true);
+	// model.traverse(node => { 
+	// 	if (!node.isMesh) return;
+	// 	node.material.transparent = true 
+	// });
+  // collect once
+  const meshMats = [];
+  model.traverse(n => {
+    if (n.isMesh && n.material) {
+      if (Array.isArray(n.material)) meshMats.push(...n.material.filter(Boolean));
+      else meshMats.push(n.material);
+    }
+  });
 
-  // collect point materials once
-  // const pointMats = (points?.children || [])
-  //   .map(p => p.material)
-  //   .filter(Boolean);
+  const pointMats = (points?.children || [])
+    .map(p => p.material)
+    .filter(Boolean);
 
   new Tween.Tween({ t: 0 })
     .to({ t: 1 }, 1000)
     .easing(Easing.Exponential.Out)
     .onUpdate(({ t }) => {
-      // fade model to `target` and points to the inverse
-      const modelOpacity = target ? t : (1 - t);
-			model.traverse(node => {
-				if (!node.isMesh) return;
-				node.material.opacity = modelOpacity;
-			});
+			const modelOpacity = (target === 1) ? t : (1 - t);
 
-			// 2) Fade the point clouds towards target (inverse of model)
-			points.children.forEach(pt => {
-				pt.material.opacity = 1 - modelOpacity;
-			});
-      // meshMats.forEach(m => m.opacity = modelOpacity);
-      // pointMats.forEach(pm => pm.opacity = 1 - modelOpacity);
-    })
-    .start();
+			meshMats.forEach(m => {
+        m.transparent = true;
+        m.depthTest = true;
+        m.depthWrite = (modelOpacity >= 0.999); // <-- disable while semi/fully transparent
+        m.opacity = modelOpacity;
+      });
+
+			// points fade inverse, never write depth
+      pointMats.forEach(pm => {
+        pm.transparent = true;
+        pm.depthTest = true;
+        pm.depthWrite = false;            // <-- prevent “dimming” interactions
+        pm.opacity = 1 - modelOpacity;
+      });
+
+      // hide fully invisible model to avoid future depth artifacts
+			model.visible = !(modelOpacity <= .001);
+
+      // // fade model to `target` and points to the inverse
+      // const modelOpacity = target ? t : (1 - t);
+			// model.traverse(node => {
+			// 	if (!node.isMesh) return;
+			// 	node.material.opacity = modelOpacity;
+			// });
+
+			// // 2) Fade the point clouds towards target (inverse of model)
+			// points.children.forEach(pt => {
+			// 	pt.material.opacity = 1 - modelOpacity;
+			// });
+			// meshMats.forEach(m => m.opacity = modelOpacity);
+			// pointMats.forEach(pm => pm.opacity = 1 - modelOpacity);
+		})
+		.start();
 }
-
 
 // --- load everything in order --- \\
 init();
@@ -377,8 +393,9 @@ function addUI() {
     obj.traverse(n => {
       if (n.material) {
         if (Array.isArray(n.material)) {
-          n.material.forEach(m => { if (m && typeof m.opacity === 'number') { m.transparent = true; m.opacity = val; } });
+          n.material.forEach(m => { if (m && typeof m.opacity === 'number') { m.transparent = true; m.opacity = val; console.log('asdf'); } });
         } else if (typeof n.material.opacity === 'number') {
+					console.log('hit');
           n.material.transparent = true;
           n.material.opacity = val;
         }
@@ -386,24 +403,36 @@ function addUI() {
     });
   };
 
-
   // buttons
   const bChair = document.createElement('button');
   bChair.textContent = 'Show Chair';
   bChair.onclick = () => {
-		if (chair) { chair.visible = !chair.visible }
+		if (chair) { chair.visible = !chair.visible; setOpacity(chair, 1)}
   };
 
   const bBrush = document.createElement('button');
   bBrush.textContent = 'Show Brush';
   bBrush.onclick = () => {
-		if (brush) { brush.visible = !brush.visible, setOpacity(brush,1); }
+		if (brush) { brush.visible = !brush.visible; setOpacity(brush, 1); }
   };
 
   const bParticles = document.createElement('button');
   bParticles.textContent = 'Show Particles';
   bParticles.onclick = () => {
-		if (points) { points.visible = !points.visible; setOpacity(points,1) }
+		if (points) { points.visible = !points.visible; setOpacity(points, 1); }
+  };
+
+	const bParticlesTransparent = document.createElement('button');
+  bParticlesTransparent.textContent = 'Particle Transparent';
+  bParticlesTransparent.onclick = () => {
+		if (points) { 
+			points.children.map(m => {
+				m.opacity = 1;
+				m.transparent = !m.transparent
+			});
+			// points.material.transparent = !points.material.transparent;
+			// points.visible = !points.visible;
+		}
   };
 
 	const bAnimate = document.createElement('button')
@@ -433,6 +462,7 @@ function addUI() {
   panel.appendChild(bChair);
   panel.appendChild(bBrush);
   panel.appendChild(bParticles);
+	panel.appendChild(bParticlesTransparent)
 	panel.appendChild(bAnimate);
 	panel.appendChild(bFade);
   document.body.appendChild(panel);
