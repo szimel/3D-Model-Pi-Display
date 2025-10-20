@@ -6,49 +6,16 @@ import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/twe
 
 
 // TODO: 
-// 1). Fix blink problem
+// 1). Fix blink problem (DONE)
 // 2). Make logic seamlessly flow together
 // 3). Change so camera flows around model
 // 4). Build it back together in pi-viewer.js
+// OPTIONAL: hookup resource profile and minimize it
 
 // global vars for threejs/scene
 let scene, camera, renderer, stats, chair, brush, points, AnimationData;
-
-// let state = {
-// 	chair: 0 || 1, // 0 or 1, lets you do state.arrays.white/black[state.chair] && state.colors[state.chair]
-// 	prevAnimation: 'chair',
-// 	currentAnimation: 'chair',
-// 	frameCount: 0,
-// 	transitionStarted: false,
-// 	reverse: false,
-// 	arrays: {
-// 		white: {
-// 			chair: [],
-// 			brush: []
-// 		},
-// 		black: {
-// 			chair: [],
-// 			brush: []
-// 		},
-// 	},
-// 	colors: {
-// 		orange: {
-// 			r: 145/255,
-// 			g: 50/255,
-// 			b: 20/255
-// 		},
-//     white: {
-// 			r: 1,
-// 			g: 1,
-// 			b: 1
-// 		}
-// 	}
-// }
 let state = {
 	index: 0 || 1, // 0 or 1, lets you do state.arrays.white/black[state.chair] && state.colors[state.chair]
-	prevAnimation: 'chair',
-	currentAnimation: 'chair',
-	frameCount: 0,
 	transitionStarted: false,
 	reverse: false,
 	arrays: { // holds target pos for points
@@ -68,8 +35,6 @@ let state = {
 		},
 	]
 }
-
-console.log(state.chair);
 
 
 function setup() {
@@ -243,109 +208,6 @@ function createParticles() {
 	scene.add(points);
 }
 
-// LOGIC: fade(from bursh trainsition to chair) state.index = 0, model opacity = o.t, aka 0 to 1
-// animation (of chair) state.index = 1, model opacity = 1 - o.t
-// For brush, state.index = 0 means use 1 - o.t && state.index = 1 means o.t
-
-// function startFadeTween(model) {
-// 		// this code only runs once when in a function
-// 		// let indicator = (!!state.index) ? 1 : 0; 
-// 		if (!!state.index && model.name === 'chair') {
-// 			indicator = 0;
-// 		} else if (model.name === 'chair') {
-// 			indicator = 1;
-// 		} else if (!!state.index && model.name === 'brush') {
-// 			indicator = 1;
-// 		} else {
-// 			indicator = 0;
-// 		}
-
-
-// 		const fadeTween = new Tween.Tween({ t: 0 })
-// 		.to({ t: 1 }, 1000)
-// 		.easing(Easing.Exponential.Out)
-// 		.onUpdate(o => {
-// 			// takes o.t which runs from [0,1]. We will use this to set opacity on model and point cloud
-// 			// 1) Fade the model’s meshes towards target (0 or 1)
-			// model.traverse(node => {
-			// 	if (!node.isMesh) return;
-			// 	node.material.opacity = Math.abs(1 - indicator - o.t);
-			// });
-
-			// // 2) Fade the point clouds towards target (inverse of model)
-			// points.children.forEach(pt => {
-			// 	pt.material.opacity = 1 - node.material.opacity;
-			// });
-// 		}).start();
-// }
-function startFadeTween(model) {
-  if (!model) return;
-
-  // XOR: chair => !state.index, brush => !!state.index
-  const s = !!state.index;
-  const target = (model.name === 'chair') ? Number(!s) : Number(s); // 0 or 1
-
-  // collect mesh materials once (handles single or array materials)
-	let count = 0
-
-	// THIS FIXES THE BLINK PROBLEM
-	// model.traverse(node => { 
-	// 	if (!node.isMesh) return;
-	// 	node.material.transparent = true 
-	// });
-  // collect once
-  const meshMats = [];
-  model.traverse(n => {
-    if (n.isMesh && n.material) {
-      if (Array.isArray(n.material)) meshMats.push(...n.material.filter(Boolean));
-      else meshMats.push(n.material);
-    }
-  });
-
-  const pointMats = (points?.children || [])
-    .map(p => p.material)
-    .filter(Boolean);
-
-  new Tween.Tween({ t: 0 })
-    .to({ t: 1 }, 1000)
-    .easing(Easing.Exponential.Out)
-    .onUpdate(({ t }) => {
-			const modelOpacity = (target === 1) ? t : (1 - t);
-
-			meshMats.forEach(m => {
-        m.transparent = true;
-        m.depthTest = true;
-        m.depthWrite = (modelOpacity >= 0.999); // <-- disable while semi/fully transparent
-        m.opacity = modelOpacity;
-      });
-
-			// points fade inverse, never write depth
-      pointMats.forEach(pm => {
-        pm.transparent = true;
-        pm.depthTest = true;
-        pm.depthWrite = false;            // <-- prevent “dimming” interactions
-        pm.opacity = 1 - modelOpacity;
-      });
-
-      // hide fully invisible model to avoid future depth artifacts
-			model.visible = !(modelOpacity <= .001);
-
-      // // fade model to `target` and points to the inverse
-      // const modelOpacity = target ? t : (1 - t);
-			// model.traverse(node => {
-			// 	if (!node.isMesh) return;
-			// 	node.material.opacity = modelOpacity;
-			// });
-
-			// // 2) Fade the point clouds towards target (inverse of model)
-			// points.children.forEach(pt => {
-			// 	pt.material.opacity = 1 - modelOpacity;
-			// });
-			// meshMats.forEach(m => m.opacity = modelOpacity);
-			// pointMats.forEach(pm => pm.opacity = 1 - modelOpacity);
-		})
-		.start();
-}
 
 // --- load everything in order --- \\
 init();
@@ -407,7 +269,7 @@ function addUI() {
   const bChair = document.createElement('button');
   bChair.textContent = 'Show Chair';
   bChair.onclick = () => {
-		if (chair) { chair.visible = !chair.visible; setOpacity(chair, 1)}
+		if (chair) { chair.visible = !chair.visible; }
   };
 
   const bBrush = document.createElement('button');
@@ -423,34 +285,22 @@ function addUI() {
   };
 
 	const bParticlesTransparent = document.createElement('button');
-  bParticlesTransparent.textContent = 'Particle Transparent';
+  bParticlesTransparent.textContent = 'switch';
   bParticlesTransparent.onclick = () => {
-		if (points) { 
-			points.children.map(m => {
-				m.opacity = 1;
-				m.transparent = !m.transparent
-			});
-			// points.material.transparent = !points.material.transparent;
-			// points.visible = !points.visible;
-		}
+		console.log(state.index);
+		state.index = Number(!state.index);
   };
 
 	const bAnimate = document.createElement('button')
 	bAnimate.textContent = "Animation";
 	bAnimate.onclick = () => {
 		startTweenTransition();
-		state.prevAnimation = 'chair' ? 'brush' : 'chair';
 	}
 
-	const bFade = document.createElement('button')
-	bFade.textContent = "Fade";
-	bFade.onclick = () => {
-		for (let i = 0; i < 110; i++) {
-			// modelFadeSwitch(brush, state.reverse);
-			// state.index = !!state.index ? 0 : 1; // flip it
-			// fadeTween.start();
-			startFadeTween(chair);
-		}
+	const bFadeC = document.createElement('button')
+	bFadeC.textContent = "Fade Chair";
+	bFadeC.onclick = () => {
+		startFadeTween();
 	}
 
 	const bFixState = document.createElement('button')
@@ -464,55 +314,83 @@ function addUI() {
   panel.appendChild(bParticles);
 	panel.appendChild(bParticlesTransparent)
 	panel.appendChild(bAnimate);
-	panel.appendChild(bFade);
+	panel.appendChild(bFadeC);
   document.body.appendChild(panel);
 }
 
-// const fadeTween = new Tween({t: 0})
-// 	.to({ t: .05 }, 3000)
-// 	.easing(Easing.Exponential.Out)
-// 	.onUpdate(o => {
-// 		// takes o.t which runs from [0,1]. We will use this to set opacity on model and point cloud
-// 		// 1) Fade the model’s meshes towards target (0 or 1)
-// 		model.traverse(node => {
-// 			if (!node.isMesh) return;
-// 			// (!!state.index) returns true for 1, false for 0
-// 			node.material.opacity = (!!state.index) ? 1 - o.t : o.t;
-// 			// node.material.opacity = THREE.MathUtils.clamp(
-// 			// 	node.material.opacity + (reverse ? +delta : -delta),
-// 			// 	0, 1
-// 			// );
-// 		});
 
-// 		// 2) Fade the point clouds towards target (inverse of model)
-// 		points.children.forEach(pt => {
-// 			pt.material.opacity = (!!state.index) ? o.t : 1 - o.t;
-// 			// pt.material.opacity = THREE.MathUtils.clamp(
-// 			// 	pt.material.opacity + (reverse ? -delta : +delta),
-// 			// 	0, 1
-// 			// );
-// 			// if (pt.material.opacity !== pointsTarget) allDone = false;
-// 		});
-// 		console.log(o)
-// 	})
+// LOGIC: fade(from brush transition to chair) state.index = 0, model opacity = o.t, aka 0 to 1
+// animation (of chair) state.index = 1, model opacity = 1 - o.t
+// For brush, state.index = 0 means use 1 - o.t && state.index = 1 means o.t
+function startFadeTween() {
+	// Need to decide which model we are in, within the animation cycle
+	let model;
+	if (chair.visible) model = chair;
+	else if(!chair.visible && !state.index && !brush.visible) model = chair;
+	else model = brush;
 
-// TODO: Order will look something like this? 
-// runAnimation('chair', chair)
-// manageState('animation', chair)
-// modelFadeSwitch(chair, state.reverse)
-// manageState('fade', chair)
-// startTweenTransition()
-// manageState('transition', brush)
-// modelFadeSwitch(brush, state.reverse)
-// runAnimation('brush', brush)
-// manageState('animation', chair)
-// modelFadeSwitch(brush, state.reverse)
-// manageState('fade', chair)
-// ..... too much 
 
-// TODO: Get rid of 
-// ORDER: transition => fade => cameraPath => fade => transition => ...
-// lots of state that has to change between functions, prob bc i am bad at coding 
+
+  // chair => !state.index, brush => !!state.index
+  const s = !!state.index;
+  const target = (model.name === 'chair') ? Number(!s) : Number(s); // 0 or 1
+
+  // collect once, outside of tween.onUpdate()
+  const meshMats = [];
+  model.traverse(n => {
+    if (n.isMesh && n.material) {
+      if (Array.isArray(n.material)) meshMats.push(...n.material.filter(Boolean));
+      else meshMats.push(n.material);
+    }
+  });
+
+  const pointMats = (points?.children || [])
+    .map(p => p.material)
+    .filter(Boolean);
+
+  new Tween.Tween({ t: 0 })
+    .to({ t: 1 }, 1000)
+    .easing(Easing.Exponential.Out)
+    .onUpdate(({ t }) => {
+			const modelOpacity = (target === 1) ? t : (1 - t);
+
+			meshMats.forEach(m => {
+        m.transparent = true;
+        m.depthTest = true;
+        m.depthWrite = (modelOpacity >= 0.999); // <-- disable while semi/fully transparent
+        m.opacity = modelOpacity;
+      });
+
+			// points fade inverse, never write depth
+      pointMats.forEach(pm => {
+        pm.transparent = true;
+        pm.depthTest = true;
+        pm.depthWrite = false;            // <-- prevent “dimming” interactions
+        pm.opacity = 1 - modelOpacity;
+      });
+
+      // hide fully invisible model to avoid future depth artifacts
+			model.visible = !(modelOpacity <= .001);
+
+      // // fade model to `target` and points to the inverse
+      // const modelOpacity = target ? t : (1 - t);
+			// model.traverse(node => {
+			// 	if (!node.isMesh) return;
+			// 	node.material.opacity = modelOpacity;
+			// });
+
+			// // 2) Fade the point clouds towards target (inverse of model)
+			// points.children.forEach(pt => {
+			// 	pt.material.opacity = 1 - modelOpacity;
+			// });
+			// meshMats.forEach(m => m.opacity = modelOpacity);
+			// pointMats.forEach(pm => pm.opacity = 1 - modelOpacity);
+		})
+		.start();
+}
+
+
+// ORDER is roughly fade => transition => fade => camera path => ...repeat
 function manageState(prev,model) {
 	// after fadeAnimation
 	if (prev === 'fade') {
@@ -527,32 +405,11 @@ function manageState(prev,model) {
 	}
 }
 
-// potentially silly, but lets 
-function startTweenTransition(model) {
-	console.log('ran');
+// no context needed
+function startTweenTransition() {
 	const [whitePts, blackPts] = points.children;
 	const whiteTarget = state.arrays.white[state.index];
 	const blackTarget = state.arrays.black[state.index];
-	// let color, model, whiteTarget, blackTarget, nextStep;
-
-	// prob better way to do this but didn't want a ton of = bool ? ___ : ___;
-	// switch (state.prevAnimation) {
-	// 	case 'chair':
-	// 		nextStep     = 'brushFade';
-	// 		model        = brush;
-	// 		color        = state.colors.orange;
-	// 		whiteTarget  = state.arrays.white.brush;
-	// 		blackTarget  = state.arrays.black.brush;
-	// 		break;
-
-	// 	case 'brush':
-	// 		nextStep     = 'chairFade';
-	// 		model        = chair;
-	// 		color        = state.colors.white;
-	// 		whiteTarget  = state.arrays.white.chair;
-	// 		blackTarget  = state.arrays.black.chair;
-	// 		break;
-	// }
 	const { r: R, g: G, b: B } = state.colors[state.index];
 
 	new Tween.Tween({ t:0 })
@@ -563,7 +420,7 @@ function startTweenTransition(model) {
 			let posArr = points.geometry.attributes.position.array;
 			let startColor = points.material.color;
 
-			if(posArr[0] === target[0]) {console.log("FUCK")}
+			if(posArr[0] === target[0]) {console.log("you done messed up")}
 
 			for (let i = 0; i < posArr.length; i++) {
 				const endPos = THREE.MathUtils.lerp(posArr[i], target[i], o.t);
@@ -582,243 +439,9 @@ function startTweenTransition(model) {
 		
 		calcStep(whitePts, whiteTarget, true);
 		calcStep(blackPts, blackTarget, false);
-		state.frameCount++;
-
-		// animation has ended, move to next step
-		// if(state.frameCount === 150) {
-		// 	state.frameCount = 0;
-		// 	model.visible = true;
-		// 	state.currentAnimation = nextStep;
-		// 	state.reverse = true;
-		// } 
 	})
 	.start();
 }
-
-function modelFadeSwitch(model, reverse) {
-	if(!fadeStep(model, reverse)) {
-		points.position.copy(model.position);
-		state.frameCount ++;
-	} else if(reverse) { // 
-		points.visible = false;
-		state.currentAnimation = state.prevAnimation === 'chair' ? 'brush' : 'chair';
-		state.prevAnimation = 'transition';
-		state.frameCount = 0; // TODO: change??
-	} else {
-		model.visible = false;
-		state.transitionStarted = false;
-		state.currentAnimation = 'transition';
-		state.frameCount = 0; // TODO: change??
-		debugger;
-	}
-}
-
-// Fade model ↔ points in or out by Δ each call.
-function fadeStep(model, delta = 0.01) {
-	console.log('ra')
-	// Determine targets
-	const modelTarget  = state.chair ? 0 : 1;
-	const pointsTarget = state.chair ? 1 : 0;
-
-	// We'll flip to false if any opacity isn't at target yet.
-	let allDone = true;
-
-	// 1) Fade the model’s meshes
-	model.traverse(node => {
-		if (!node.isMesh) return;
-		console.log('a')
-		// move it toward the target
-		node.material.opacity = THREE.MathUtils.clamp(
-			node.material.opacity + (state.index === 0 ? +delta : -delta),
-			0, 1
-		);
-		// if it’s not quite at the target, we’re not done
-		if (node.material.opacity !== modelTarget) allDone = false;
-	});
-
-	// 2) Fade the point clouds
-	points.children.forEach(pt => {
-		console.log('b');
-		pt.material.opacity = THREE.MathUtils.clamp(
-			pt.material.opacity + (state.index === 0 ? -delta : +delta),
-			0, 1
-		);
-		if (pt.material.opacity !== pointsTarget) allDone = false;
-	});
-
-	return allDone;
-}
-
-
-// // --- --- \\
-// function animate(time) {
-//   requestAnimationFrame(animate);
-//   stats.update();
-//   Tween.update(time);
-
-//   switch (state.currentAnimation) {
-//     case 'chair':
-//       modelAnimation(chair, false);
-//       break;
-// 		case 'chairFade': 
-// 			modelFadeSwitch(chair, state.reverse);
-// 			break;
-//     case 'transition':
-// 			if (!state.transitionStarted) {
-// 				state.transitionStarted = true;
-// 				startTweenTransition();
-// 			}
-//       break;
-//     case 'brush':
-//       modelAnimation(brush, true);
-//       break;
-// 		case 'brushFade': 
-// 			modelFadeSwitch(brush, state.reverse);
-// 			break;
-// 		case 'state':
-// 			manageState()
-//   }
-
-//   renderer.render(scene, camera);
-// }
-
-// function modelFadeSwitch(model, reverse) {
-// 	if(!fadeStep(model, reverse)) {
-// 		points.position.copy(model.position);
-// 		state.frameCount ++;
-// 	} else if(reverse) {
-// 		points.visible = false;
-// 		state.currentAnimation = state.prevAnimation === 'chair' ? 'brush' : 'chair';
-// 		state.prevAnimation = 'transition';
-// 		state.frameCount = 0; // TODO: change??
-// 	} else {
-// 		model.visible = false;
-// 		state.transitionStarted = false;
-// 		state.currentAnimation = 'transition';
-// 		state.frameCount = 0; // TODO: change??
-// 	}
-// }
-
-// function modelAnimation(model, reverse) {
-// 	const path = AnimationData.stool;
-// 	let { frameCount } = state;
-// 	if (frameCount < path.length - 1) {
-// 		//determine pos/frame for model
-// 		const frame = reverse ? (path.length - 1 - frameCount) : frameCount;
-
-// 		//update camera + model position
-// 		const { x, y, z } = path[frame];
-// 		model.position.set(x, y, z);
-// 		camera.lookAt(model.position)
-// 		state.frameCount++;
-
-
-// 	} else {
-// 		state.frameCount = 0;
-// 		state.prevAnimation = state.currentAnimation;
-// 		const nextStep = state.currentAnimation === 'chair' ? 'chairFade' : 'brushFade';
-// 		state.currentAnimation = nextStep;
-// 		state.reverse = false;
-// 		points.visible = true;
-// 	}
-// }
-
-// // Fade model ↔ points in or out by Δ each call.
-// function fadeStep(model, reverse, delta = 0.01) {
-//   // Determine targets
-//   const modelTarget  = reverse ? 1 : 0;
-//   const pointsTarget = reverse ? 0 : 1;
-
-//   // We'll flip to false if *any* opacity isn't at target yet.
-//   let allDone = true;
-
-//   // 1) Fade the model’s meshes
-//   model.traverse(node => {
-//     if (!node.isMesh) return;
-//     // move it toward the target
-//     node.material.opacity = THREE.MathUtils.clamp(
-//       node.material.opacity + (reverse ? +delta : -delta),
-//       0, 1
-//     );
-//     // if it’s not quite at the target, we’re not done
-//     if (node.material.opacity !== modelTarget) allDone = false;
-//   });
-
-//   // 2) Fade the point clouds
-//   points.children.forEach(pt => {
-//     pt.material.opacity = THREE.MathUtils.clamp(
-//       pt.material.opacity + (reverse ? -delta : +delta),
-//       0, 1
-//     );
-//     if (pt.material.opacity !== pointsTarget) allDone = false;
-//   });
-
-//   return allDone;
-// }
-
-// function startTweenTransition() {
-// 	const [whitePts, blackPts] = points.children;
-// 	let color, model, whiteTarget, blackTarget, nextStep;
-
-// 	// prob better way to do this but didn't want a ton of = bool ? ___ : ___;
-// 	switch (state.prevAnimation) {
-// 		case 'chair':
-// 			nextStep     = 'brushFade';
-// 			model        = brush;
-// 			color        = state.colors.orange;
-// 			whiteTarget  = state.arrays.white.target;
-// 			blackTarget  = state.arrays.black.target;
-// 			break;
-
-// 		case 'brush':
-// 			nextStep     = 'chairFade';
-// 			model        = chair;
-// 			color        = state.colors.white;
-// 			whiteTarget  = state.arrays.white.og;
-// 			blackTarget  = state.arrays.black.og;
-// 			break;
-// 	}
-// 	const { r: R, g: G, b: B } = color;
-
-// 	new Tween.Tween({ t:0 })
-// 		.to({ t: .05 }, 3000)
-// 		.easing(Easing.Exponential.Out)
-// 		.onUpdate(o => {
-// 		function calcStep(points, target, bool) {
-// 			let posArr = points.geometry.attributes.position.array;
-// 			let startColor = points.material.color;
-
-// 			if(posArr[0] === target[0]) {console.log("FUCK")}
-
-// 			for (let i = 0; i < posArr.length; i++) {
-// 				const endPos = THREE.MathUtils.lerp(posArr[i], target[i], o.t);
-// 				posArr[i] = endPos;
-// 			}
-
-// 			if(bool) {
-// 				const r = THREE.MathUtils.lerp(startColor.r, R, o.t);
-// 				const g = THREE.MathUtils.lerp(startColor.g, G, o.t);
-// 				const b = THREE.MathUtils.lerp(startColor.b, B, o.t);
-// 				startColor.setRGB(r, g, b);
-// 			}
-
-// 			points.geometry.attributes.position.needsUpdate = true;
-// 		}
-		
-// 		calcStep(whitePts, whiteTarget, true);
-// 		calcStep(blackPts, blackTarget, false);
-// 		state.frameCount++;
-
-// 		// animation has ended, move to next step
-// 		if(state.frameCount === 150) {
-// 			state.frameCount = 0;
-// 			model.visible = true;
-// 			state.currentAnimation = nextStep;
-// 			state.reverse = true;
-// 		} 
-// 	})
-// 	.start();
-// }
 
 
 // /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
