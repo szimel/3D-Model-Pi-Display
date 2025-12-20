@@ -14,18 +14,11 @@ import Tween, {Easing} from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/twe
 // OPTIONAL: hookup resource profile and minimize it
 
 // global vars for threejs/scene
-const Phase = { FadeA:0, Transition:1, FadeB:2, Animate:3 };
 let scene, camera, renderer, stats, brush, chair, points, AnimationData;
 let state = {
 	model: chair,
 	modelVisible: true,
-	index: 0 || 1, // 0 or 1, lets you do state.arrays.white/black[state.chair] && state.colors[state.chair]
-	phase: Phase.FadeA,
-	framesLeft: 60,
-	arrays: { // holds target pos for points
-		white: [],
-		black: [],
-	},
+	index: 0 || 1, // 1 = chair, 0 = brush
 	colors: [
     { // white
 			r: 1,
@@ -65,15 +58,15 @@ function createFadeNodes() {
     .filter(Boolean);
 }
 
-// simplifies point transition a ton - run it once in init
-let wDelta, bDelta, whiteStart, blackStart;
+
+// only calculate deltas once
+let wDelta, bDelta;
 function createDeltas() {
 	const [whitePts, blackPts] = points.children;
-	whiteStart  = new Float32Array(whitePts.geometry.attributes.position.array);
-  blackStart  = new Float32Array(blackPts.geometry.attributes.position.array);
-  const whiteTarget = new Float32Array(state.arrays.white[state.index]);
-  const blackTarget = new Float32Array(state.arrays.black[state.index]);
-	
+	const whiteStart  = new Float32Array(whitePts.geometry.attributes.position.array);
+  const blackStart  = new Float32Array(blackPts.geometry.attributes.position.array);
+  const whiteTarget = new Float32Array(whitePts.geometry.attributes.targetPosition.array);
+  const blackTarget = new Float32Array(blackPts.geometry.attributes.targetPosition.array);
 	
 	wDelta = new Float32Array(whiteTarget.length); // same dimension as target, but w/ 0's
 	bDelta = new Float32Array(blackTarget.length);
@@ -113,7 +106,7 @@ async function loadAssets() {
 	try{
 		const loader = new GLTFLoader();
 		const [json, chairGLB, brushGLB] = await Promise.all([
-			fetch('./path-data.json').then(r=>r.json()),
+			fetch('./new-path-data.json').then(r=>r.json()),
 			loader.loadAsync('../Models/stool.glb'),
 			loader.loadAsync('../Models/brush_2.glb')
 		]);
@@ -152,12 +145,12 @@ async function loadAssets() {
 		});
 
 		brush.scale.set(1,1,1);
-		brush.position.set(0,-.5,0);
+		brush.position.set(0, 0, 0);
 		brush.rotation.x = THREE.MathUtils.degToRad(90);
 		brush.visible = false;
 
 		chair.rotation.x = THREE.MathUtils.degToRad(90);
-		chair.position.set(0, -.5, -.12); // suck at blender, so have to manually set
+		chair.position.set(0, 0, -.14); // suck at blender, so have to manually set
 
 		chair.traverse(node => {
 			if(node.isMesh) {
@@ -241,21 +234,21 @@ function createParticles() {
 	points.rotation.x = THREE.MathUtils.degToRad(90);
 
 	 // match chair & set state for starting cycle
-	points.position.set(0,-.5,-.12);
+	points.position.set(0, 0, -.14);
 	points.visible = true;
 
-	// set state and save points coords for white and black target and original positions 
-	const [ whitePts, blackPts ] = points.children;
-	state.arrays = {
-		white: [
-			new Float32Array(whitePts.geometry.attributes.position.array),
-			new Float32Array(whitePts.geometry.attributes.targetPosition.array)
-		],
-		black: [
-			new Float32Array(blackPts.geometry.attributes.position.array),
-			new Float32Array(blackPts.geometry.attributes.targetPosition.array)
-		]
-	};
+	// // set state and save points coords for white and black target and original positions 
+	// const [ whitePts, blackPts ] = points.children;
+	// state.arrays = {
+	// 	white: [
+	// 		new Float32Array(whitePts.geometry.attributes.position.array),
+	// 		new Float32Array(whitePts.geometry.attributes.targetPosition.array)
+	// 	],
+	// 	black: [
+	// 		new Float32Array(blackPts.geometry.attributes.position.array),
+	// 		new Float32Array(blackPts.geometry.attributes.targetPosition.array)
+	// 	]
+	// };
 
 	// helps fix visual bug
 	points.children.map(p => {
@@ -265,6 +258,50 @@ function createParticles() {
 	})
 
 	scene.add(points);
+}
+
+// Continuous loop around a cylinder with rise/fall
+function makeCylPath({
+  radius = 1,
+  samples = 900,       // number of frames/points
+  turns = 1,           // how many full wraps around the cylinder
+  amp = 0.75,           // rise/fall amplitude
+  waves = 2,           // how many up/down cycles per full loop
+  yOffset = 0
+} = {}) {
+  const pts = new Array(samples);
+  // IMPORTANT: do NOT sample t=2π and t=0 both; that duplicates the seam
+  for (let i = 0; i < samples; i++) {
+    const t = (i / samples) * (Math.PI * 2); // 0..2π (exclusive)
+    const theta = turns * t;
+    const x = radius * Math.cos(theta);
+    const z = radius * Math.sin(theta);
+    const y = yOffset + amp * Math.sin(waves * t); // smooth rise/fall
+    pts[i] = { x, y, z };
+  }
+	console.log(pts);
+  return pts;
+}
+
+// Everything run on tween - this chains them together
+function runCycle() {
+  const s = !!state.index;
+  const first  = s ? chair : brush;
+  const second = s ? brush : chair;
+
+	const t1 = animationTween(AnimationData.stool.length);
+  const t2 = fadeTween(first, true);
+  const t3 = transitionTween(s);
+  const t4 = fadeTween(second, false);
+
+  t1.chain(t2).chain(t3).chain(t4);
+  t4.onComplete(() => { 
+		// choose other model
+		state.currentModel = s ? brush : chair
+		state.index = s ? 0 : 1; 
+		runCycle();
+	});
+	t1.start();
 }
 
 
@@ -279,68 +316,24 @@ async function init() {
 	createDeltas();
 	state.model = chair;
 
+	// tweenIntegers();
+	// curve();
+	makeCylPath();
+
+	camera.position.set(1.2, 0, 0)
+	camera.lookAt(0,0,0)
+
 	animate();
+	runCycle();
 }
 
-function tickPhase() {
-  switch (state.phase) {
-    case Phase.FadeA: {
-			stepFade(state.framesLeft, 60);
-      // stepFade(model, /*towardVisible=*/false);
-      break;
-    }
-    case Phase.Transition: {
-      stepTransition(state.framesLeft);                           // TODO: make this function
-      break;
-    }
-    case Phase.FadeB: {
-			stepFade(state.framesLeft, 60);
-      // stepFade(model, /*towardVisible=*/true);
-      break;
-    }
-    case Phase.Animate: {
-      stepModelAnimation(state.framesLeft);                       // TODO: make this function
-      break;
-    }
-  }
-	state.framesLeft--;
-
-  // decides when to move to next step
-  if (state.framesLeft === 0) {
-    switch (state.phase) {
-      case Phase.FadeA: {
-				state.modelVisible = false;
-				state.framesLeft = 10; // 3 sec
-				state.phase = Phase.Transition
-				break;
-			}
-      case Phase.Transition: {
-				state.framesLeft = 60; // 1 sec
-				state.phase = Phase.FadeB;
-				break;
-			}
-      case Phase.FadeB: {
-				state.framesLeft = AnimationData.stool.length // TODO
-				state.phase = Phase.Animate;
-				break;
-			}
-      case Phase.Animate: {
-				state.framesLeft = 60;
-				state.phase = Phase.FadeA;
-				state.model = !!state.index ? chair : brush;
-				state.index = !!state.index ? 0 : 1;
-				state.modelVisible = true;
-				break;
-			}
-    }
-  }
-}
 
 function animate(time) {
 	requestAnimationFrame(animate);
+	// camera.lookAt(chair.position);
 	stats.update();
 	Tween.update(time);
-	tickPhase();
+	// tickPhase();
 
 
 	renderer.render(scene, camera);
@@ -385,7 +378,8 @@ function addUI() {
   bParticles.onclick = (e) => {
 		// if (points) { points.visible = !points.visible; setOpacity(points, 1); }
 		if (e) {
-			camera.position.set(1, 1, 1)
+			let {x, y, z} = brush.position
+			brush.position.set(x, y, z + .01)
 			camera.lookAt(chair);
 		}
 	}
@@ -406,7 +400,8 @@ function addUI() {
 	const bFadeC = document.createElement('button')
 	bFadeC.textContent = "Fade Chair";
 	bFadeC.onclick = () => {
-		startFadeTween();
+		const t = fadeTween(chair, true)
+		t.start();
 	}
 
 	const bFixState = document.createElement('button')
@@ -477,6 +472,16 @@ function stepTransition(frames) {
   for (let i = 0; i < bDelta.length; i++) { bPos[i] = blackStart[i] + (bDelta[i] * t); }
 }
 
+function animationTween(N) {
+  return new Tween.Tween({ i: 0 })
+    .to({ i: (N - 1) }, (Math.round(N/60) * 1000))
+    .onUpdate(({ i }) => {
+			i = Math.round(i);
+      const {x, y, z} = AnimationData.stool[i];
+			camera.position.set(x, y, z);
+			camera.lookAt(state.model.position);
+    })
+}
 
 // LOGIC: Whole system runs on fade => transition => fade => animation => fade => ... and repeat 
 // pattern. This function is the fade part. So it runs twice, and cycles between fading in and out 
@@ -484,87 +489,61 @@ function stepTransition(frames) {
 // (fade(chair, !points) => !chair, points) => transition => (fade(!brush, points) => brush, 
 // !points) => animation => (fade(brush, !points) => !brush, points) => transition => (fade(!chair, 
 // points) => chair, !points) => and repeat pattern
-function startFadeTween() {
-	if (!chair || !brush || !points) return;
-
-  // Decide which model to drive this fade cycle.
-  // If chair is visible or we're at the "chair comes next" branch (state.index false and brush hidden) => chair, else we're on brush.
-  const s = !!state.index; // 0 => false, 1 => true
-  const model = (chair.visible || (!s && !brush.visible)) ? chair : brush;
-
-  // Target opacity for the chosen model this cycle: chair => !s, brush => s
-  const target = (model === chair) ? Number(!s) : Number(s); // 0 or 1
-
+function fadeTween(model, shouldFade) {
   // make sure both are visible during fading
   model.visible = true;
   points.visible = true;
 
-  // grab once, outside .onUpdate()
-  const meshMats = [];
-  model.traverse(n => {
-    if (n.isMesh && n.material) {
-      if (Array.isArray(n.material)) meshMats.push(...n.material.filter(Boolean));
-      else meshMats.push(n.material);
-    }
-  });
+	console.log(model.name, shouldFade);
 
-  const pointMats = (points.children || [])
-    .map(p => p.material)
-    .filter(Boolean);
-
-  new Tween.Tween({ t: 0 })
-    .to({ t: 1 }, 1000)
+  return new Tween.Tween({ t: 0 })
+    .to({ t: 1 }, 2000)
     .easing(Easing.Quartic.Out)
     .onUpdate(({ t }) => {
-			const modelOpacity  = (target === 1) ? t : (1 - t);
+			const modelOpacity  = shouldFade ? (1 - t) : t;
 
-      meshMats.forEach(m => {
-        m.opacity    = modelOpacity;
-        m.depthWrite = (modelOpacity >= .99);
-      });
+			// grab correct model
+			fadeNodes.model[state.index].forEach(material => {
+				material.opacity = modelOpacity;
+				material.depthWrite = (modelOpacity >= .99)
+			})
 
-      pointMats.forEach(pm => {
-        pm.opacity = 1 - modelOpacity;
-      });
+			fadeNodes.points.forEach(material => material.opacity = 1 - modelOpacity);
+
 		})
 		.onComplete(() => {
-			// make sure everything end in right state
 			points.visible = points.children[0].material.opacity > .99;
 			model.visible = !points.visible;
 		})
-		.start();
 }
 
 // GPT's way of more dramatic transition animation
 const BackIn  = (s = 1.70158) => k => k * k * ((s + 1) * k - s);
-function startTweenTransition() {
+function transitionTween(toBrush) {
+	// .onComplete doesn't work anymore - have to do this here
+	points.visible = points.children[0].material.opacity > .99;
+	state.model.visible = !points.visible;
+
   const [whitePts, blackPts] = points.children;
-
-  // no mutating
-  const whiteStart  = new Float32Array(whitePts.geometry.attributes.position.array);
+	const whiteStart  = new Float32Array(whitePts.geometry.attributes.position.array);
   const blackStart  = new Float32Array(blackPts.geometry.attributes.position.array);
-  const whiteTarget = new Float32Array(state.arrays.white[state.index]);
-  const blackTarget = new Float32Array(state.arrays.black[state.index]);
 
-	// create an array which holds each points respective delta x,y,z (where delta is targetPosition - startPosition).
-	// allows for less computation & you always end at target position
-	const wDelta = new Float32Array(whiteTarget.length); // same dimension as target, but w/ 0's
-	const bDelta = new Float32Array(blackTarget.length);
-  for (let i = 0; i < whiteTarget.length; i++) { wDelta[i] = whiteTarget[i] - whiteStart[i]; }
-  for (let i = 0; i < blackTarget.length; i++) { bDelta[i] = blackTarget[i] - blackStart[i]; }
+	// if we are going form brush => chair, use neg. delta
+	const inverse = !!state.index ? 1 : -1;
 
   const startCol = whitePts.material.color.clone();
   const { r: R, g: G, b: B } = state.colors[state.index]; // always chooses opposite of whitePts
 
 	// unfortunately, since brush and chair's respective positions are different, 
 	// we have to shift points dynamically as it walks through this animation (thankfully, only on z axis)
-	const zStart = !!state.index ? -.12 : 0;
-	const zDelta = !!state.index ? .12: -.12;
+	const zStart = toBrush ? -.12 : 0;
+	const zDelta = toBrush ? .12: -.12;
 
-  new Tween.Tween({ t: 0 })
+  return new Tween.Tween({ t: 0 })
     .to({ t: 1 }, 3000)
     .easing(BackIn(4))
     .onUpdate(({ t }) => {
+			t = t * inverse;
       const wPos = whitePts.geometry.attributes.position.array;
       const bPos = blackPts.geometry.attributes.position.array;
 
@@ -598,7 +577,6 @@ function startTweenTransition() {
 
       whitePts.material.color.setRGB(R, G, B);
     })
-    .start();
 }
 
 
