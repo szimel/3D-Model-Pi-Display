@@ -1,2 +1,4 @@
-node_modules
-Models
+node_modules 
+Models 
+dist 
+bundle.js

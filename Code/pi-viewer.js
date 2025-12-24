@@ -1,12 +1,14 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
-import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
-import Stats from 'three/addons/libs/stats.module.js';
-import Tween, { Easing } from 'https://unpkg.com/@tweenjs/tween.js@23.1.3/dist/tween.esm.js';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { Easing, Group, Tween } from '@tweenjs/tween.js';
+import Stats from 'three/examples/jsm/libs/stats.module.js';
+import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // global vars for threejs/scene
 let scene, camera, renderer, stats, brush, chair, cane, points, AnimationData, index = 0;
+
+const tweenGroup = new Group();
 
 // --- SHADERS (The "Scripts" for the GPU) ---
 const particleVertexShader = `
@@ -225,18 +227,16 @@ async function loadAssets() {
   try {
     const loader = new GLTFLoader();
     const [json, chairGLB, brushGLB, caneGLB] = await Promise.all([
-      fetch('./path-data.json').then((r) => r.json()),
-      loader.loadAsync('../Models/stool_3.glb'),
-      loader.loadAsync('../Models/brush_2.glb'),
-			loader.loadAsync('../Models/cane3.glb'),
+			fetch('./path-data.json').then(r=>r.json()),
+			loader.loadAsync('/../Models/stool.glb'),
+			loader.loadAsync('/../Models/brush.glb'),
+			loader.loadAsync('/../Models/cane.glb'),
     ]);
 
     AnimationData = json;
     chair = chairGLB.scene;
     brush = brushGLB.scene;
 		cane = caneGLB.scene;
-
-
     chair.name = 'chair';
     brush.name = 'brush';
 		cane.name = 'cane';
@@ -423,7 +423,7 @@ function createParticles() {
 function animate(time) {
   requestAnimationFrame(animate);
   stats.update();
-  Tween.update(time);
+  tweenGroup.update(time);
   renderer.render(scene, camera);
 }
 
@@ -432,7 +432,7 @@ function animationTween(N) {
   // run duration: roughly N frames at 60fps
   const dur = Math.max(500, Math.round(N / 60) * 1000);
 
-  return new Tween.Tween({ i: 0 })
+  const tween = new Tween({ i: 0 })
     .to({ i: N - 1 }, dur)
     .onUpdate(({ i }) => {
       i = Math.round(i);
@@ -443,6 +443,9 @@ function animationTween(N) {
       camera.position.set(x, y, z);
       camera.lookAt(brush.position); // ALWAYS in exact center => always look at it
     });
+	
+	tweenGroup.add(tween);
+	return tween;
 }
 
 // Fade a model ↔ points
@@ -450,7 +453,7 @@ function fadeTween(model, modelIndex, shouldFade) {
   const modelMats = fadeNodes.model[modelIndex];
 	const easing = shouldFade ? Easing.Cubic.In : Easing.Cubic.Out;
 
-  return new Tween.Tween({ t: 0 })
+  const tween = new Tween({ t: 0 })
     .to({ t: 1 }, 3000)
     .easing(easing)
     .onStart(() => {
@@ -485,6 +488,9 @@ function fadeTween(model, modelIndex, shouldFade) {
         model.visible = true;
       }
     });
+	
+	tweenGroup.add(tween);
+	return tween;
 }
 
 
@@ -512,7 +518,7 @@ function transitionTween(targetIndex) {
   
   const startVal = mainMat.uniforms.uCyclePos.value;
 
-  return new Tween.Tween({ t: startVal })
+  const tween = new Tween({ t: startVal })
     .to({ t: endValue }, 6000)
     .easing(Easing.Linear.None)
     .onUpdate(({ t }) => {
@@ -533,6 +539,9 @@ function transitionTween(targetIndex) {
         mainMat.uniforms.uCyclePos.value = endValue;
         accentMat.uniforms.uCyclePos.value = endValue;
     });
+	
+	tweenGroup.add(tween);
+	return tween;
 }
 
 
