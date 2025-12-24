@@ -88,6 +88,8 @@ async function loadAssets() {
 				node.position.set(0, 0, 0);
 				node.rotation.set(0, 0, 0);
 				node.scale.set(1, 1, 1);
+				node.material.transparent = true;
+				node.material.depthTest = true;
 			}
 		});
 
@@ -98,9 +100,11 @@ async function loadAssets() {
 
 		chair.rotation.x = THREE.MathUtils.degToRad(90);
 
+		// helps fix visual bugs
 		chair.traverse(node => {
 			if(node.isMesh) {
 				node.material.transparent = true;
+				node.material.depthTest = true;
 			}
 		})
 
@@ -200,6 +204,13 @@ function createParticles() {
 			target: blackPts.geometry.attributes.targetPosition.array
 		}
 	};
+
+	// helps fix visual bug
+	points.children.map(p => {
+		p.material.transparent = true; 
+		p.material.depthTest = true; 
+		p.material.depthWrite = false;
+	})
 
 	scene.add(points);
 }
@@ -353,7 +364,7 @@ function startTweenTransition() {
 			let posArr = points.geometry.attributes.position.array;
 			let startColor = points.material.color;
 
-			if(posArr[0] === target[0]) {console.log("FUCK")}
+			if(posArr[0] === target[0]) {console.log("YOu really messed up")}
 
 			for (let i = 0; i < posArr.length; i++) {
 				const endPos = THREE.MathUtils.lerp(posArr[i], target[i], o.t);
@@ -389,5 +400,6 @@ function startTweenTransition() {
 // /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
 // --disable-web-security \
 // --user-data-dir="/tmp/chrome-dev-disable-cors" \
-// --allow-file-access-from-files \                                                --enable-precise-memoryinfo \
+// --allow-file-access-from-files \                                                
+// --enable-precise-memoryinfo \
 // file:///Users/samuel/code/Elijah/Pi-code/Animation/camera.html
