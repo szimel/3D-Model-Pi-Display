@@ -551,7 +551,7 @@ function runCycle() {
   const t3 = transitionTween(nextIdx);
   const t4 = fadeTween(nextModel, nextIdx, false);
 
-  // t1.chain(t2);
+  t1.chain(t2);
   t2.chain(t3);
   t3.chain(t4);
 
@@ -560,7 +560,7 @@ function runCycle() {
     runCycle();
   });
 
-  t2.start();
+  t1.start();
 }
 
 // --- load everything in order --- \\
