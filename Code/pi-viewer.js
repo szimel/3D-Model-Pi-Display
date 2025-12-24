@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Easing, Group, Tween } from '@tweenjs/tween.js';
-import Stats from 'three/examples/jsm/libs/stats.module.js';
+// import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -200,15 +200,15 @@ function setup() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xD2B48C); // tan
 
-  stats = new Stats(); // fps thing
+  // stats = new Stats(); // fps thing
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputEncoding = THREE.sRGBEncoding;
   document.body.appendChild(renderer.domElement);
-  document.body.appendChild(stats.dom);
+  // document.body.appendChild(stats.dom);
 
   camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 10);
-  camera.position.set(1.5, 0, 0);
+  camera.position.set(1.2, 0, 0);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
   const dir = new THREE.DirectionalLight(0xffffff, 1);
@@ -279,7 +279,7 @@ async function loadAssets() {
     brush.rotation.x = THREE.MathUtils.degToRad(90);
     brush.visible = false;
 
-		// chair.position.set(0, 1.5, 0);
+		// chair.position.set(0, 1.2, 0);
     chair.visible = true;
 
 		// Setup for cane is different than others. 5 total meshes. Need to combine 
@@ -422,7 +422,7 @@ function createParticles() {
 // Continuous render loop
 function animate(time) {
   requestAnimationFrame(animate);
-  stats.update();
+  // stats.update();
   tweenGroup.update(time);
   renderer.render(scene, camera);
 }
@@ -528,9 +528,9 @@ function transitionTween(targetIndex) {
       
 			const theta = 2 * Math.PI * t;
 			camera.position.set(
-				1.5 * Math.cos(theta),
+				1.2 * Math.cos(theta),
 				0,
-				1.5 * Math.sin(theta),
+				1.2 * Math.sin(theta),
 			);
 			camera.lookAt(brush.position);
     })
@@ -581,6 +581,7 @@ async function init() {
   createFadeNodes();
 
 	// addUI();
+	// makeCylPath();
 	camera.lookAt(brush.position);
 
   // initial visibility / opacity state
@@ -708,7 +709,7 @@ async function init() {
 
 // // Generates path around model.
 // function makeCylPath({
-//   radius = 1.5,
+//   radius = 1.2,
 //   samples = 900,       // number of frames/points
 //   turns = 1,           // how many full wraps around the cylinder
 //   amp = 0.7,           // rise/fall amplitude
@@ -719,10 +720,15 @@ async function init() {
 //   for (let i = 0; i < samples; i++) {
 //     const t = (i / samples) * (Math.PI * 2); // 0..2π (exclusive)
 //     const theta = turns * t;
-//     const x = radius * Math.cos(theta);
-//     const z = radius * Math.sin(theta);
-//     const y = yOffset + amp * Math.sin(waves * t); // smooth rise/fall
-//     pts[i] = { x, y, z };
+//     let x = radius * Math.cos(theta);
+//     let z = radius * Math.sin(theta);
+//     let y = yOffset + amp * Math.sin(waves * t); // smooth rise/fall
+
+// 		x = Math.round(x * 1000)/1000;
+// 		y = Math.round(y * 1000)/1000;
+// 		z = Math.round(z * 1000)/1000;
+
+// 		pts[i] = { x, y, z };
 //   }
 // 	console.log(pts);
 //   return pts;
